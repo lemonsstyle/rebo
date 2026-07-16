@@ -7,6 +7,34 @@
     window.postMessage({ channel: CHANNEL, sender: "page", requestId, ...payload }, window.location.origin);
   }
 
+  function readCookie(name) {
+    const prefix = `${name}=`;
+    const cookie = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix));
+    if (!cookie) {
+      return "";
+    }
+
+    try {
+      return decodeURIComponent(cookie.slice(prefix.length));
+    } catch {
+      return cookie.slice(prefix.length);
+    }
+  }
+
+  function createWeiboRequestHeaders() {
+    const headers = {
+      Accept: "application/json, text/plain, */*",
+      "Client-Version": "3.0.0",
+      "X-Requested-With": "XMLHttpRequest"
+    };
+    const xsrfToken = readCookie("XSRF-TOKEN");
+    if (xsrfToken) {
+      headers["X-XSRF-TOKEN"] = xsrfToken;
+    }
+
+    return headers;
+  }
+
   function findObservedTimelineEndpoint() {
     const entries = performance.getEntriesByType("resource").slice().reverse();
 
@@ -26,11 +54,7 @@
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await window.fetch(endpoint, {
         credentials: "same-origin",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Client-Version": "3.0.0",
-          "X-Requested-With": "XMLHttpRequest"
-        }
+        headers: createWeiboRequestHeaders()
       });
 
       lastResponse = response;
@@ -86,16 +110,14 @@
     endpoint.searchParams.set("id", String(statusId));
     endpoint.searchParams.set("is_reload", "1");
     endpoint.searchParams.set("count", "20");
+    endpoint.searchParams.set("is_show_bulletin", "2");
     endpoint.searchParams.set("fetch_level", "0");
+    endpoint.searchParams.set("locale", "zh-CN");
 
     try {
       const response = await window.fetch(endpoint, {
         credentials: "same-origin",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Client-Version": "3.0.0",
-          "X-Requested-With": "XMLHttpRequest"
-        }
+        headers: createWeiboRequestHeaders()
       });
       if (!response.ok) {
         return { ok: false, reason: `评论请求失败（HTTP ${response.status}）。` };
