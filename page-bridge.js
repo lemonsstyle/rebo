@@ -134,6 +134,51 @@
     }
   }
 
+  function getArrayFromPayload(payload) {
+    const candidates = [
+      payload?.data,
+      payload?.users,
+      payload?.statuses,
+      payload?.reposts,
+      payload?.data?.data,
+      payload?.data?.users,
+      payload?.data?.statuses
+    ];
+    return candidates.find(Array.isArray) || [];
+  }
+
+  async function fetchStatusList(statusId, type) {
+    const isRepost = type === "reposts";
+    const endpoint = new URL(
+      isRepost ? "/ajax/statuses/repostTimeline" : "/ajax/statuses/attitudes",
+      window.location.origin
+    );
+    endpoint.searchParams.set("id", String(statusId));
+    endpoint.searchParams.set("count", "20");
+    endpoint.searchParams.set("page", "1");
+    if (isRepost) {
+      endpoint.searchParams.set("moduleID", "feed");
+    }
+
+    try {
+      const response = await window.fetch(endpoint, {
+        credentials: "same-origin",
+        headers: createWeiboRequestHeaders()
+      });
+      if (!response.ok) {
+        return { ok: false, reason: `${isRepost ? "转发" : "点赞"}请求失败（HTTP ${response.status}）。` };
+      }
+
+      const payload = await response.json();
+      return { ok: true, payload: { items: getArrayFromPayload(payload) } };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof Error ? error.message : `${isRepost ? "转发" : "点赞"}请求失败。`
+      };
+    }
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== window.location.origin) {
       return;
@@ -152,6 +197,13 @@
 
     if (message.type === "fetch-comments") {
       void fetchComments(message.statusId).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "fetch-reposts" || message.type === "fetch-likes") {
+      const type = message.type === "fetch-reposts" ? "reposts" : "likes";
+      void fetchStatusList(message.statusId, type).then((result) => {
         respond(message.requestId, result);
       });
     }
