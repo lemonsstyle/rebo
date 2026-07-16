@@ -81,6 +81,37 @@
     }
   }
 
+  async function fetchComments(statusId) {
+    const endpoint = new URL("/ajax/statuses/buildComments", window.location.origin);
+    endpoint.searchParams.set("id", String(statusId));
+    endpoint.searchParams.set("is_reload", "1");
+    endpoint.searchParams.set("count", "20");
+    endpoint.searchParams.set("fetch_level", "0");
+
+    try {
+      const response = await window.fetch(endpoint, {
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Client-Version": "3.0.0",
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+      if (!response.ok) {
+        return { ok: false, reason: `评论请求失败（HTTP ${response.status}）。` };
+      }
+
+      const payload = await response.json();
+      const comments = payload.data || payload.comments || [];
+      return { ok: true, payload: { comments: Array.isArray(comments) ? comments : [] } };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof Error ? error.message : "评论请求失败。"
+      };
+    }
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== window.location.origin) {
       return;
@@ -93,6 +124,12 @@
 
     if (message.type === "fetch-timeline") {
       void fetchTimeline(message.query).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "fetch-comments") {
+      void fetchComments(message.statusId).then((result) => {
         respond(message.requestId, result);
       });
     }
