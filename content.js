@@ -10,6 +10,11 @@
     readerEnabled: true,
     columnCount: 3
   });
+  const DENSITY_OPTIONS = Object.freeze({
+    3: { label: "稀疏", description: "卡片更宽 · 3 列" },
+    4: { label: "适中", description: "平衡阅读 · 4 列" },
+    5: { label: "密集", description: "显示更多 · 5 列" }
+  });
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -30,12 +35,19 @@
   let masonryFrame = 0;
   let loadMoreFrame = 0;
   let readerResizeObserver = null;
+  let readerCardResizeObserver = null;
   let observedReaderWidth = 0;
+  let masonryColumnCount = 0;
+  let masonryCardWidth = 0;
+  let masonryEpoch = 0;
   let activeDetailStatusId = "";
   let activeDetailAnchor = null;
   let detailHistoryPushed = false;
   let lastUrl = window.location.href;
   const readerSeenIds = new Set();
+  const masonryCardState = new WeakMap();
+  const longTextCache = new Map();
+  const pendingLongTextRequests = new Map();
   const pendingBridgeRequests = new Map();
   let sentinelObserver = null;
 
@@ -79,12 +91,18 @@
       button: root.querySelector("[data-reader-button]"),
       panel: root.querySelector("[data-reader-panel]"),
       readerToggle: root.querySelector("[data-reader-toggle]"),
-      columnChoices: [...root.querySelectorAll("[data-column-choice]")]
+      densitySlider: root.querySelector("[data-density-slider]"),
+      densityDescription: root.querySelector("[data-density-description]"),
+      densityLabels: [...root.querySelectorAll("[data-density-label]")]
     };
   }
 
+  function getDensityOption(columnCount) {
+    return DENSITY_OPTIONS[columnCount] || DENSITY_OPTIONS[DEFAULT_SETTINGS.columnCount];
+  }
+
   function updateControlState() {
-    const { root, button, panel, readerToggle, columnChoices } = getControls();
+    const { root, button, panel, readerToggle, densitySlider, densityDescription, densityLabels } = getControls();
     const available = isFeedRoute();
 
     if (!root) {
@@ -100,11 +118,22 @@
       readerToggle.checked = settings.readerEnabled;
     }
 
-    for (const choice of columnChoices || []) {
-      const isSelected = Number(choice.dataset.columnChoice) === settings.columnCount;
-      choice.classList.toggle("weibo-grid-reader__column-choice--active", isSelected);
-      choice.setAttribute("aria-pressed", String(isSelected));
-      choice.disabled = !settings.readerEnabled;
+    const density = getDensityOption(settings.columnCount);
+    if (densitySlider) {
+      densitySlider.value = String(settings.columnCount);
+      densitySlider.disabled = !settings.readerEnabled;
+      densitySlider.setAttribute("aria-valuetext", `${density.label}，${density.description}`);
+      densitySlider.style.setProperty(
+        "--weibo-grid-reader-density-progress",
+        `${((settings.columnCount - 3) / 2) * 100}%`
+      );
+    }
+    if (densityDescription) {
+      densityDescription.textContent = density.description;
+    }
+    for (const label of densityLabels || []) {
+      const isSelected = Number(label.dataset.densityLabel) === settings.columnCount;
+      label.classList.toggle("weibo-grid-reader__density-label--active", isSelected);
     }
   }
 
@@ -266,6 +295,7 @@
     const cards = [...grid.querySelectorAll(".weibo-grid-reader__card")];
     if (!cards.length || !grid.clientWidth) {
       grid.style.height = "";
+      grid.removeAttribute("data-masonry-height");
       return;
     }
 
@@ -273,24 +303,93 @@
     const gap = 16;
     const cardWidth = (grid.clientWidth - gap * (columns - 1)) / columns;
     const columnHeights = Array(columns).fill(0);
+    const shouldReassignColumns = columns !== masonryColumnCount
+      || Math.abs(cardWidth - masonryCardWidth) > 0.5;
 
-    for (const card of cards) {
-      card.style.width = `${cardWidth}px`;
-      card.style.position = "absolute";
+    if (shouldReassignColumns) {
+      masonryColumnCount = columns;
+      masonryCardWidth = cardWidth;
+      masonryEpoch += 1;
     }
 
     for (const card of cards) {
+      const state = masonryCardState.get(card) || {};
+      const widthChanged = shouldReassignColumns || Math.abs((state.width || 0) - cardWidth) > 0.5;
+      if (widthChanged) {
+        card.style.width = `${cardWidth}px`;
+        state.width = cardWidth;
+        state.height = 0;
+      }
+      if (card.style.position !== "absolute") {
+        card.style.position = "absolute";
+      }
+      if (card.style.left !== "0px") {
+        card.style.left = "0px";
+      }
+      if (card.style.top !== "0px") {
+        card.style.top = "0px";
+      }
+      masonryCardState.set(card, state);
+    }
+
+    for (const card of cards) {
+      const state = masonryCardState.get(card);
+      if (!state.height) {
+        state.height = Math.ceil(card.getBoundingClientRect().height);
+      }
       const shortestColumn = columnHeights.reduce((shortestIndex, height, index) => {
         return height < columnHeights[shortestIndex] ? index : shortestIndex;
       }, 0);
-      const cardHeight = card.offsetHeight;
-
-      card.style.left = `${shortestColumn * (cardWidth + gap)}px`;
-      card.style.top = `${columnHeights[shortestColumn]}px`;
-      columnHeights[shortestColumn] += cardHeight + gap;
+      const column = state.epoch === masonryEpoch && state.column < columns
+        ? state.column
+        : shortestColumn;
+      const top = columnHeights[column];
+      const positionKey = `${masonryEpoch}:${column}:${top}`;
+      if (state.positionKey !== positionKey) {
+        card.style.setProperty("--weibo-grid-reader-card-x", `${column * (cardWidth + gap)}px`);
+        card.style.setProperty("--weibo-grid-reader-card-y", `${top}px`);
+        state.positionKey = positionKey;
+      }
+      state.column = column;
+      state.epoch = masonryEpoch;
+      columnHeights[column] += state.height + gap;
     }
 
-    grid.style.height = `${Math.max(...columnHeights) - gap}px`;
+    const gridHeight = Math.max(0, Math.max(...columnHeights) - gap);
+    if (grid.dataset.masonryHeight !== String(gridHeight)) {
+      grid.style.height = `${gridHeight}px`;
+      grid.dataset.masonryHeight = String(gridHeight);
+    }
+  }
+
+  function observeReaderCards(cards) {
+    if (!readerCardResizeObserver) {
+      readerCardResizeObserver = new ResizeObserver((entries) => {
+        let sizeChanged = false;
+        for (const entry of entries) {
+          if (!(entry.target instanceof HTMLElement) || !entry.target.isConnected) {
+            continue;
+          }
+          const borderBox = Array.isArray(entry.borderBoxSize)
+            ? entry.borderBoxSize[0]
+            : entry.borderBoxSize;
+          const height = Math.ceil(borderBox?.blockSize || entry.contentRect.height);
+          const state = masonryCardState.get(entry.target) || {};
+          if (height && Math.abs((state.height || 0) - height) > 0.5) {
+            state.height = height;
+            masonryCardState.set(entry.target, state);
+            sizeChanged = true;
+          }
+        }
+        if (sizeChanged) {
+          scheduleMasonryLayout();
+        }
+      });
+    }
+
+    for (const card of cards) {
+      readerCardResizeObserver.observe(card);
+    }
   }
 
   function scheduleMasonryLayout() {
@@ -355,12 +454,18 @@
     sentinelObserver = null;
     readerResizeObserver?.disconnect();
     readerResizeObserver = null;
+    readerCardResizeObserver?.disconnect();
+    readerCardResizeObserver = null;
     observedReaderWidth = 0;
+    masonryColumnCount = 0;
+    masonryCardWidth = 0;
+    masonryEpoch += 1;
 
     const surface = getReaderSurface();
     if (surface) {
       surface.hidden = true;
       getReaderGrid()?.replaceChildren();
+      getReaderGrid()?.removeAttribute("data-masonry-height");
     }
   }
 
@@ -434,6 +539,57 @@
     }
 
     return "https://weibo.com/";
+  }
+
+  function isLongTextStatus(status) {
+    return Boolean(status?.isLongText || status?.is_long_text || status?.longText || status?.long_text);
+  }
+
+  function applyLongText(status, text) {
+    status.text = text;
+    status.text_raw = plainText(text);
+    status.isLongText = false;
+    status.is_long_text = false;
+    status.__weiboGridLongTextLoaded = true;
+  }
+
+  async function loadStatusLongText(status) {
+    if (!isLongTextStatus(status) && !status.__weiboGridLongTextLoaded) {
+      return false;
+    }
+    if (status.__weiboGridLongTextLoaded) {
+      return true;
+    }
+
+    const statusId = getStatusId(status);
+    if (!statusId) {
+      return false;
+    }
+    const cachedText = longTextCache.get(statusId);
+    if (cachedText) {
+      applyLongText(status, cachedText);
+      return true;
+    }
+
+    let request = pendingLongTextRequests.get(statusId);
+    if (!request) {
+      request = bridgeRequest("fetch-long-text", { statusId })
+        .then((result) => result.ok && result.payload?.text ? result.payload.text : "")
+        .catch(() => "");
+      pendingLongTextRequests.set(statusId, request);
+    }
+
+    const text = await request;
+    if (pendingLongTextRequests.get(statusId) === request) {
+      pendingLongTextRequests.delete(statusId);
+    }
+    if (!text) {
+      return false;
+    }
+
+    longTextCache.set(statusId, text);
+    applyLongText(status, text);
+    return true;
   }
 
   function getMixedMediaItems(status) {
@@ -576,16 +732,24 @@
 
   function createRichLink(href, textContent = "", preserveReferrer = false) {
     const link = document.createElement("a");
+    const imageViewerLink = isWeiboImageLink(href);
     link.className = "weibo-grid-reader__rich-link";
-    link.href = href;
-    link.target = "_blank";
-    link.rel = preserveReferrer ? "noopener" : "noopener noreferrer";
+    link.href = imageViewerLink ? getNativeImageViewerUrl() : href;
+    link.target = imageViewerLink ? "_self" : "_blank";
+    link.rel = imageViewerLink || preserveReferrer ? "noopener" : "noopener noreferrer";
     link.textContent = textContent;
-    link.addEventListener("click", (event) => event.stopPropagation());
+    link.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!imageViewerLink) {
+        return;
+      }
+      event.preventDefault();
+      openNativeImageViewer(href);
+    });
     return link;
   }
 
-  function isCommentImageUrl(value) {
+  function isWeiboImageLink(value) {
     try {
       const url = new URL(value);
       return url.hostname === "t.cn"
@@ -607,6 +771,83 @@
     const url = new URL(window.location.href);
     url.hash = "&viewer";
     return url.href;
+  }
+
+  function getComparableImageUrl(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.hostname === "t.cn") {
+        url.protocol = "https:";
+      }
+      return url.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function getImageResourceKey(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      return /(^|\.)sinaimg\.cn$/i.test(url.hostname)
+        ? url.pathname.split("/").pop() || ""
+        : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function isExtensionElement(element) {
+    return Boolean(
+      getExtensionRoot()?.contains(element)
+      || getReaderSurface()?.contains(element)
+      || getDetailOverlay()?.contains(element)
+    );
+  }
+
+  function findNativeImageTrigger(imageUrl) {
+    const comparableUrl = getComparableImageUrl(imageUrl);
+    const resourceKey = getImageResourceKey(imageUrl);
+
+    for (const link of document.querySelectorAll("a[href]")) {
+      if (isExtensionElement(link)) {
+        continue;
+      }
+      if (getComparableImageUrl(link.href) === comparableUrl) {
+        return link;
+      }
+    }
+
+    if (!resourceKey) {
+      return null;
+    }
+
+    for (const image of document.querySelectorAll("img[src]")) {
+      if (isExtensionElement(image) || getImageResourceKey(image.currentSrc || image.src) !== resourceKey) {
+        continue;
+      }
+      return image.closest("a, .woo-picture-main, .woo-picture-hover") || image;
+    }
+
+    return null;
+  }
+
+  function openNativeImageViewer(imageUrl) {
+    const trigger = findNativeImageTrigger(imageUrl);
+    if (trigger) {
+      const cancelDirectNavigation = (event) => {
+        if (event.composedPath().includes(trigger)) {
+          event.preventDefault();
+        }
+      };
+      document.addEventListener("click", cancelDirectNavigation, { capture: true, once: true });
+      trigger.click();
+    }
+
+    window.setTimeout(() => {
+      if (!window.location.hash.includes("viewer")) {
+        window.location.assign(getNativeImageViewerUrl());
+      }
+    }, 60);
   }
 
   function closeCommentImagePreview() {
@@ -684,7 +925,7 @@
       const matchIndex = match.index || 0;
       container.append(source.slice(previousEnd, matchIndex));
       const url = getSafeLinkHref(match[0]);
-      if (url && renderCommentImages && isCommentImageUrl(url)) {
+      if (url && renderCommentImages && isWeiboImageLink(url)) {
         container.append(createCommentImagePreview(url));
       } else {
         container.append(url ? createRichLink(url, match[0]) : match[0]);
@@ -739,7 +980,7 @@
         if (node.tagName === "A") {
           const href = getSafeLinkHref(node.getAttribute("href") || "");
           if (href) {
-            if (renderCommentImages && isCommentImageUrl(href)) {
+            if (renderCommentImages && isWeiboImageLink(href)) {
               target.append(createCommentImagePreview(href));
               continue;
             }
@@ -764,16 +1005,66 @@
     }, true, true);
   }
 
+  function populateStatusText(container, status) {
+    container.replaceChildren();
+    const displayText = getDisplayText(status);
+    if (hasRichStatusText(status)) {
+      appendRichStatusText(container, status);
+    } else {
+      container.textContent = displayText || "转发微博";
+    }
+  }
+
   function createTextBlock(className, status) {
     const text = document.createElement("p");
     text.className = className;
-    const displayText = getDisplayText(status);
-    if (hasRichStatusText(status)) {
-      appendRichStatusText(text, status);
-    } else {
-      text.textContent = displayText || "转发微博";
-    }
+    populateStatusText(text, status);
     return text;
+  }
+
+  function createLongTextToggle(status, text) {
+    if (!isLongTextStatus(status) && !status.__weiboGridLongTextLoaded) {
+      return null;
+    }
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "weibo-grid-reader__long-text-toggle";
+    let expanded = false;
+    const updateState = () => {
+      text.classList.toggle("weibo-grid-reader__text--expanded", expanded);
+      text.classList.toggle("weibo-grid-reader__repost-text--expanded", expanded);
+      toggle.textContent = expanded ? "收起" : "展开全文";
+      toggle.setAttribute("aria-expanded", String(expanded));
+    };
+
+    toggle.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (status.__weiboGridLongTextLoaded) {
+        expanded = !expanded;
+        updateState();
+        scheduleMasonryLayout();
+        return;
+      }
+
+      toggle.disabled = true;
+      toggle.textContent = "正在加载…";
+      const loaded = await loadStatusLongText(status);
+      toggle.disabled = false;
+      if (!loaded) {
+        toggle.textContent = "加载失败，重试";
+        return;
+      }
+
+      populateStatusText(text, status);
+      expanded = true;
+      updateState();
+      scheduleMasonryLayout();
+    });
+
+    updateState();
+    return toggle;
   }
 
   function getDisplayText(status) {
@@ -1041,7 +1332,12 @@
     header.append(avatar, identity);
 
     const repostedStatus = status.retweeted_status;
-    card.append(header, createTextBlock("weibo-grid-reader__text", status));
+    const text = createTextBlock("weibo-grid-reader__text", status);
+    const longTextToggle = createLongTextToggle(status, text);
+    card.append(header, text);
+    if (longTextToggle) {
+      card.append(longTextToggle);
+    }
 
     if (repostedStatus) {
       const repost = document.createElement("section");
@@ -1051,10 +1347,12 @@
       repostAuthor.className = "weibo-grid-reader__repost-author";
       repostAuthor.textContent = `@${repostedStatus.user?.screen_name || "原微博作者"}`;
 
-      repost.append(
-        repostAuthor,
-        createTextBlock("weibo-grid-reader__repost-text", repostedStatus)
-      );
+      const repostText = createTextBlock("weibo-grid-reader__repost-text", repostedStatus);
+      const repostLongTextToggle = createLongTextToggle(repostedStatus, repostText);
+      repost.append(repostAuthor, repostText);
+      if (repostLongTextToggle) {
+        repost.append(repostLongTextToggle);
+      }
 
       const repostMedia = createStatusMedia(repostedStatus);
       if (repostMedia) {
@@ -1084,11 +1382,7 @@
   function createDetailText(status, className = "weibo-grid-reader__detail-text") {
     const text = document.createElement("div");
     text.className = className;
-    if (hasRichStatusText(status)) {
-      appendRichStatusText(text, status);
-    } else {
-      text.textContent = getDisplayText(status) || "转发微博";
-    }
+    populateStatusText(text, status);
     return text;
   }
 
@@ -1114,6 +1408,9 @@
       image.removeAttribute("src");
     }, { once: true });
     viewer.addEventListener("wheel", (event) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (!viewer.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
         return;
       }
@@ -1156,6 +1453,13 @@
         button.classList.toggle("weibo-grid-reader__detail-thumbnail--active", buttonIndex === index);
         button.setAttribute("aria-pressed", String(buttonIndex === index));
       });
+      if (rail.isConnected) {
+        buttons[index]?.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+        });
+      }
     };
 
     for (const [index, pictureUrl] of pictureUrls.entries()) {
@@ -1236,6 +1540,23 @@
     }
 
     return post;
+  }
+
+  async function hydrateDetailLongText(status, post) {
+    if (!isLongTextStatus(status) && !status.__weiboGridLongTextLoaded) {
+      return;
+    }
+
+    const loaded = await loadStatusLongText(status);
+    if (!loaded || !post.isConnected) {
+      return;
+    }
+
+    const text = post.querySelector(".weibo-grid-reader__detail-text");
+    if (text) {
+      populateStatusText(text, status);
+      repositionActiveDetail();
+    }
   }
 
   function createCommentItem(comment) {
@@ -1331,6 +1652,39 @@
     }
   }
 
+  function isImageViewerReadyForScroll(viewer, detailMain) {
+    if (!detailMain) {
+      return true;
+    }
+
+    const viewerRect = viewer.getBoundingClientRect();
+    const mainRect = detailMain.getBoundingClientRect();
+    const fullyVisible = viewerRect.top >= mainRect.top && viewerRect.bottom <= mainRect.bottom;
+    const viewerIsTallerThanMain = viewerRect.height > detailMain.clientHeight;
+    const mainIsAtEnd = detailMain.scrollTop + detailMain.clientHeight >= detailMain.scrollHeight - 1;
+    return fullyVisible || (viewerIsTallerThanMain && mainIsAtEnd);
+  }
+
+  function canScrollVertically(element, distance) {
+    if (!element || !distance || element.scrollHeight <= element.clientHeight) {
+      return false;
+    }
+
+    return distance > 0
+      ? element.scrollTop + element.clientHeight < element.scrollHeight - 1
+      : element.scrollTop > 0;
+  }
+
+  function canScrollHorizontally(element, distance) {
+    if (!element || !distance || element.scrollWidth <= element.clientWidth) {
+      return false;
+    }
+
+    return distance > 0
+      ? element.scrollLeft + element.clientWidth < element.scrollWidth - 1
+      : element.scrollLeft > 0;
+  }
+
   function handleDetailWheel(event, dialog) {
     if (event.defaultPrevented) {
       return;
@@ -1356,24 +1710,29 @@
       return;
     }
 
-    if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
-      scrollTarget.scrollLeft += event.deltaX || event.deltaY;
-      return;
-    }
-
     if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer")) {
-      const hasVerticalOverflow = scrollTarget.scrollHeight > scrollTarget.clientHeight;
-      const movingUp = event.deltaY < 0;
-      const canScrollImage = hasVerticalOverflow && (movingUp
-        ? scrollTarget.scrollTop > 0
-        : scrollTarget.scrollTop + scrollTarget.clientHeight < scrollTarget.scrollHeight - 1);
+      const detailMain = scrollTarget.closest(".weibo-grid-reader__detail-main");
+      if (!isImageViewerReadyForScroll(scrollTarget, detailMain)) {
+        detailMain?.scrollBy({ top: event.deltaY, left: event.deltaX });
+        return;
+      }
 
-      if (canScrollImage) {
+      if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
+        const horizontalDistance = event.deltaX || event.deltaY;
+        if (canScrollHorizontally(scrollTarget, horizontalDistance)) {
+          scrollTarget.scrollLeft += horizontalDistance;
+          return;
+        }
+        detailMain?.scrollBy({ top: event.deltaY, left: event.deltaX });
+        return;
+      }
+
+      if (canScrollVertically(scrollTarget, event.deltaY)) {
         scrollTarget.scrollTop += event.deltaY;
         return;
       }
 
-      scrollTarget = scrollTarget.closest(".weibo-grid-reader__detail-main") || scrollTarget;
+      scrollTarget = detailMain || scrollTarget;
     }
 
     if (
@@ -1408,7 +1767,7 @@
 
     const dialog = document.createElement("div");
     dialog.className = "weibo-grid-reader__detail-dialog";
-    const detailMedia = createDetailMedia(status);
+    const detailMedia = createDetailMedia(status.retweeted_status || status);
     const isTextOnlyDetail = !detailMedia.media && !status.retweeted_status;
     const main = document.createElement("main");
     main.className = "weibo-grid-reader__detail-main";
@@ -1419,10 +1778,13 @@
     if (isTextOnlyDetail) {
       dialog.classList.add("weibo-grid-reader__detail-dialog--text-only");
     }
-    main.append(createDetailPost(status, false, detailMedia.media));
+    const primaryPost = createDetailPost(status, false, status.retweeted_status ? null : detailMedia.media);
+    main.append(primaryPost);
 
+    let repostPost = null;
     if (status.retweeted_status) {
-      main.append(createDetailPost(status.retweeted_status, true));
+      repostPost = createDetailPost(status.retweeted_status, true, detailMedia.media);
+      main.append(repostPost);
     }
 
     const commentsSection = document.createElement("section");
@@ -1470,7 +1832,7 @@
     });
     overlay.addEventListener("wheel", (event) => {
       handleDetailWheel(event, dialog);
-    }, { passive: false });
+    }, { capture: true, passive: false });
     document.documentElement.append(overlay);
     document.documentElement.classList.add("weibo-grid-reader-detail-open");
     window.requestAnimationFrame(() => {
@@ -1485,6 +1847,10 @@
       detailHistoryPushed = false;
     }
 
+    void hydrateDetailLongText(status, primaryPost);
+    if (repostPost) {
+      void hydrateDetailLongText(status.retweeted_status, repostPost);
+    }
     void loadDetailComments(status, comments);
   }
 
@@ -1506,6 +1872,7 @@
     }
 
     grid.append(...cards);
+    observeReaderCards(cards);
     scheduleMasonryLayout();
     scheduleLoadMore();
     return cards.length;
@@ -1564,6 +1931,12 @@
     readerSeenIds.clear();
     getReaderGrid()?.replaceChildren();
     getReaderGrid()?.style.removeProperty("height");
+    getReaderGrid()?.removeAttribute("data-masonry-height");
+    readerCardResizeObserver?.disconnect();
+    readerCardResizeObserver = null;
+    masonryColumnCount = 0;
+    masonryCardWidth = 0;
+    masonryEpoch += 1;
     void loadTimeline();
   }
 
@@ -1657,41 +2030,43 @@
     const root = document.createElement("section");
     root.id = ROOT_ID;
     root.innerHTML = `
-      <button class="weibo-grid-reader__button" type="button" data-reader-button aria-label="打开微博阅读器" aria-expanded="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M4 6h16"></path>
-          <path d="M4 12h16"></path>
-          <path d="M4 18h16"></path>
-          <circle cx="8" cy="6" r="1.5" fill="currentColor"></circle>
-          <circle cx="16" cy="12" r="1.5" fill="currentColor"></circle>
-          <circle cx="11" cy="18" r="1.5" fill="currentColor"></circle>
+      <button class="weibo-grid-reader__button" type="button" data-reader-button aria-label="打开 rebo 阅读器" aria-expanded="false">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.75 12s3.25-5.25 9.25-5.25S21.25 12 21.25 12 18 17.25 12 17.25 2.75 12 2.75 12Z"></path>
+          <circle cx="12" cy="12" r="2.8"></circle>
         </svg>
       </button>
       <aside class="weibo-grid-reader__drawer" data-reader-panel aria-hidden="true" aria-label="微博阅读器设置">
         <header class="weibo-grid-reader__header">
           <div>
-            <p class="weibo-grid-reader__eyebrow">WEIBO READER</p>
+            <p class="weibo-grid-reader__eyebrow">rebo</p>
             <h2>阅读布局</h2>
           </div>
           <button class="weibo-grid-reader__close" type="button" data-reader-close aria-label="关闭抽屉">×</button>
         </header>
         <div class="weibo-grid-reader__settings">
           <label class="weibo-grid-reader__setting">
-            <span>
+            <span class="weibo-grid-reader__setting-copy">
               <strong>使用新布局</strong>
               <small>独立多列卡片墙</small>
             </span>
-            <input type="checkbox" data-reader-toggle>
+            <span class="weibo-grid-reader__switch">
+              <input type="checkbox" data-reader-toggle>
+              <span class="weibo-grid-reader__switch-track" aria-hidden="true"></span>
+            </span>
           </label>
           <div class="weibo-grid-reader__setting weibo-grid-reader__column-setting">
-            <span>
-              <strong>卡片列数</strong>
-              <small>卡片更宽或显示更多内容</small>
+            <span class="weibo-grid-reader__setting-copy">
+              <strong>信息密度</strong>
+              <small data-density-description>卡片更宽 · 3 列</small>
             </span>
-            <div class="weibo-grid-reader__column-choices" role="group" aria-label="选择卡片列数">
-              <button type="button" data-column-choice="3">3</button>
-              <button type="button" data-column-choice="4">4</button>
-              <button type="button" data-column-choice="5">5</button>
+            <div class="weibo-grid-reader__density-control">
+              <input class="weibo-grid-reader__density-slider" type="range" min="3" max="5" step="1" value="3" data-density-slider aria-label="选择信息密度">
+              <div class="weibo-grid-reader__density-labels" aria-hidden="true">
+                <span data-density-label="3">稀疏</span>
+                <span data-density-label="4">适中</span>
+                <span data-density-label="5">密集</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1717,19 +2092,17 @@
       refreshPage();
     });
 
-    root.querySelectorAll("[data-column-choice]").forEach((choice) => {
-      choice.addEventListener("click", () => {
-        const nextColumnCount = Number(choice.dataset.columnChoice);
-        if (![3, 4, 5].includes(nextColumnCount)) {
-          return;
-        }
+    root.querySelector("[data-density-slider]")?.addEventListener("input", (event) => {
+      const nextColumnCount = Number(event.currentTarget.value);
+      if (![3, 4, 5].includes(nextColumnCount)) {
+        return;
+      }
 
-        settings.columnCount = nextColumnCount;
-        getReaderSurface()?.setAttribute("data-columns", String(nextColumnCount));
-        saveSettings();
-        updateControlState();
-        scheduleMasonryLayout();
-      });
+      settings.columnCount = nextColumnCount;
+      getReaderSurface()?.setAttribute("data-columns", String(nextColumnCount));
+      saveSettings();
+      updateControlState();
+      scheduleMasonryLayout();
     });
   }
 
@@ -1853,7 +2226,6 @@
       refreshPage();
       repositionActiveDetail();
     }, { passive: true });
-    window.addEventListener("scroll", scheduleLoadMore, { passive: true });
     window.addEventListener("popstate", () => {
       if (activeDetailStatusId) {
         closeDetail(false);

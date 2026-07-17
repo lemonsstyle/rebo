@@ -130,9 +130,10 @@
   align-items: flex-start;
 }
 
-.weibo-grid-reader__setting span {
+.weibo-grid-reader__setting-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .weibo-grid-reader__setting strong {
@@ -145,50 +146,144 @@
   font-size: 11px;
 }
 
-.weibo-grid-reader__setting input {
-  accent-color: #ff8200;
+.weibo-grid-reader__switch {
+  display: block;
+  flex: 0 0 auto;
+  height: 24px;
+  position: relative;
+  width: 42px;
+}
+
+.weibo-grid-reader__switch input {
+  block-size: 1px;
+  inline-size: 1px;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.weibo-grid-reader__switch-track {
+  background: #d7dadd;
+  border-radius: 999px;
+  cursor: pointer;
+  inset: 1px 0;
+  position: absolute;
+  transition: background 160ms ease;
+}
+
+.weibo-grid-reader__switch-track::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  content: "";
+  height: 20px;
+  left: 2px;
+  position: absolute;
+  top: 1px;
+  transition: transform 160ms ease;
+  width: 20px;
+}
+
+.weibo-grid-reader__switch input:checked + .weibo-grid-reader__switch-track {
+  background: #ff8200;
+}
+
+.weibo-grid-reader__switch input:checked + .weibo-grid-reader__switch-track::after {
+  transform: translateX(18px);
+}
+
+.weibo-grid-reader__switch input:focus-visible + .weibo-grid-reader__switch-track {
+  outline: 2px solid #a84d00;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__switch input:disabled + .weibo-grid-reader__switch-track {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.weibo-grid-reader__density-control {
+  display: grid;
+  flex: 0 0 138px;
+  gap: 7px;
+  width: 138px;
+}
+
+.weibo-grid-reader__density-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--weibo-grid-reader-density-progress, 0%),
+    #f1d3b3 var(--weibo-grid-reader-density-progress, 0%) 100%
+  );
+  border-radius: 999px;
+  cursor: pointer;
+  height: 5px;
+  margin: 7px 0 0;
+  padding: 0;
+  width: 100%;
+}
+
+.weibo-grid-reader__density-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 5px;
+}
+
+.weibo-grid-reader__density-slider::-webkit-slider-thumb {
+  appearance: none;
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
   cursor: pointer;
   height: 17px;
+  margin-top: -6px;
   width: 17px;
 }
 
-.weibo-grid-reader__setting input:disabled {
-  cursor: not-allowed;
+.weibo-grid-reader__density-slider::-moz-range-track {
+  background: #f1d3b3;
+  border-radius: 999px;
+  height: 5px;
 }
 
-.weibo-grid-reader__column-choices {
-  background: #fff;
-  border: 1px solid rgb(255 130 0 / 20%);
-  border-radius: 8px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  overflow: hidden;
-}
-
-.weibo-grid-reader__column-choices button {
-  background: transparent;
-  border: 0;
-  border-right: 1px solid rgb(255 130 0 / 16%);
-  color: #777;
-  cursor: pointer;
-  font-size: 12px;
-  height: 28px;
-  padding: 0;
-  width: 28px;
-}
-
-.weibo-grid-reader__column-choices button:last-child {
-  border-right: 0;
-}
-
-.weibo-grid-reader__column-choices button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.weibo-grid-reader__column-choices .weibo-grid-reader__column-choice--active {
+.weibo-grid-reader__density-slider::-moz-range-progress {
   background: #ff8200;
-  color: #fff;
+  border-radius: 999px;
+  height: 5px;
+}
+
+.weibo-grid-reader__density-slider::-moz-range-thumb {
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
+  height: 11px;
+  width: 11px;
+}
+
+.weibo-grid-reader__density-slider:focus-visible {
+  outline: 2px solid #a84d00;
+  outline-offset: 4px;
+}
+
+.weibo-grid-reader__density-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.weibo-grid-reader__density-labels {
+  color: #9b8d82;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  line-height: 1;
+}
+
+.weibo-grid-reader__density-label--active {
+  color: #d96200;
+  font-weight: 700;
 }
 
 html.weibo-grid-reader-active .wbpro-side {
@@ -238,8 +333,8 @@ html.weibo-grid-reader-active footer {
   border-radius: 18px;
   display: block;
   gap: 16px;
+  overflow-anchor: none;
   position: relative;
-  transition: height 160ms ease;
 }
 
 .weibo-grid-reader__card {
@@ -257,12 +352,21 @@ html.weibo-grid-reader-active footer {
   overflow: hidden;
   padding: 16px;
   text-decoration: none;
-  transition: box-shadow 150ms ease, transform 150ms ease;
+  transform: translate3d(
+    var(--weibo-grid-reader-card-x, 0px),
+    var(--weibo-grid-reader-card-y, 0px),
+    0
+  );
+  transition: box-shadow 150ms ease;
 }
 
 .weibo-grid-reader__card:hover {
   box-shadow: 0 0 0 5px #e2e7ea, 0 12px 28px rgb(28 28 28 / 14%);
-  transform: translateY(-2px);
+  transform: translate3d(
+    var(--weibo-grid-reader-card-x, 0px),
+    calc(var(--weibo-grid-reader-card-y, 0px) - 2px),
+    0
+  );
 }
 
 html.weibo-grid-reader-detail-open {
@@ -317,7 +421,34 @@ html.weibo-grid-reader-detail-open {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 22px;
-  scroll-behavior: smooth;
+}
+
+.weibo-grid-reader__detail-main,
+.weibo-grid-reader__detail-side-content {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.weibo-grid-reader__detail-main:hover,
+.weibo-grid-reader__detail-side-content:hover {
+  scrollbar-color: rgb(141 129 118 / 58%) transparent;
+}
+
+.weibo-grid-reader__detail-main::-webkit-scrollbar,
+.weibo-grid-reader__detail-side-content::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.weibo-grid-reader__detail-main::-webkit-scrollbar-thumb,
+.weibo-grid-reader__detail-side-content::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.weibo-grid-reader__detail-main:hover::-webkit-scrollbar-thumb,
+.weibo-grid-reader__detail-side-content:hover::-webkit-scrollbar-thumb {
+  background: rgb(141 129 118 / 58%);
 }
 
 .weibo-grid-reader__detail-main--image-focus {
@@ -379,6 +510,35 @@ html.weibo-grid-reader-detail-open {
   width: 100%;
 }
 
+.weibo-grid-reader__detail-image-viewer {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: none;
+}
+
+.weibo-grid-reader__detail-image-viewer:hover {
+  scrollbar-color: rgb(255 130 0 / 62%) transparent;
+  scrollbar-width: thin;
+}
+
+.weibo-grid-reader__detail-image-viewer::-webkit-scrollbar {
+  height: 0;
+  width: 0;
+}
+
+.weibo-grid-reader__detail-image-viewer:hover::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+}
+
+.weibo-grid-reader__detail-image-viewer::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.weibo-grid-reader__detail-image-viewer:hover::-webkit-scrollbar-thumb {
+  background: rgb(255 130 0 / 62%);
+}
+
 .weibo-grid-reader__detail-full-image {
   display: block;
 }
@@ -415,6 +575,11 @@ html.weibo-grid-reader-detail-open {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 12px 8px;
+  scrollbar-width: none;
+}
+
+.weibo-grid-reader__detail-thumbnail-rail::-webkit-scrollbar {
+  display: none;
 }
 
 .weibo-grid-reader__detail-thumbnail {
@@ -761,6 +926,35 @@ html.weibo-grid-reader-detail-open {
   -webkit-line-clamp: 4;
 }
 
+.weibo-grid-reader__text--expanded,
+.weibo-grid-reader__repost-text--expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.weibo-grid-reader__long-text-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: #e66d00;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.weibo-grid-reader__long-text-toggle:hover {
+  color: #b95500;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__long-text-toggle:disabled {
+  color: #a99e95;
+  cursor: progress;
+  text-decoration: none;
+}
+
 .weibo-grid-reader__emoji {
   display: inline-block;
   height: 1.18em;
@@ -1021,7 +1215,7 @@ html.weibo-grid-reader-detail-open {
   }
 
   .weibo-grid-reader__detail-main {
-    overflow-y: visible;
+    overflow-y: auto;
     padding: 18px;
   }
 

@@ -134,6 +134,38 @@
     }
   }
 
+  async function fetchLongText(statusId) {
+    const endpoint = new URL("/ajax/statuses/longtext", window.location.origin);
+    endpoint.searchParams.set("id", String(statusId));
+
+    try {
+      const response = await window.fetch(endpoint, {
+        credentials: "same-origin",
+        headers: createWeiboRequestHeaders()
+      });
+      if (!response.ok) {
+        return { ok: false, reason: `长文请求失败（HTTP ${response.status}）。` };
+      }
+
+      const payload = await response.json();
+      const data = payload.data || payload;
+      const text = data.longTextContent
+        || data.long_text_content
+        || data.text
+        || data.text_raw
+        || "";
+      if (!text) {
+        return { ok: false, reason: "长文响应中没有正文。" };
+      }
+      return { ok: true, payload: { text: String(text) } };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof Error ? error.message : "长文请求失败。"
+      };
+    }
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== window.location.origin) {
       return;
@@ -152,6 +184,12 @@
 
     if (message.type === "fetch-comments") {
       void fetchComments(message.statusId).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "fetch-long-text") {
+      void fetchLongText(message.statusId).then((result) => {
         respond(message.requestId, result);
       });
     }
