@@ -283,8 +283,7 @@ html.weibo-grid-reader-detail-open {
   box-shadow: 0 16px 44px rgb(0 0 0 / 20%);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 240px;
-  max-height: min(620px, calc(100vh - 28px));
-  min-height: 330px;
+  height: min(620px, calc(100vh - 28px));
   overflow: hidden;
   position: fixed;
   width: min(780px, calc(100vw - 28px));
@@ -451,6 +450,17 @@ html.weibo-grid-reader-detail-open {
   width: min(100%, 420px);
 }
 
+.weibo-grid-reader__status-media-stack,
+.weibo-grid-reader__detail-media-stack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__detail-media-stack {
+  align-self: start;
+}
+
 .weibo-grid-reader__comments {
   display: grid;
   gap: 12px;
@@ -462,23 +472,7 @@ html.weibo-grid-reader-detail-open {
   margin: 0;
 }
 
-.weibo-grid-reader__detail-list-section {
-  display: grid;
-  gap: 12px;
-}
-
-.weibo-grid-reader__detail-list-section h2 {
-  color: #333;
-  font-size: 14px;
-  margin: 0;
-}
-
 .weibo-grid-reader__comment-list {
-  display: grid;
-  gap: 14px;
-}
-
-.weibo-grid-reader__detail-person-list {
   display: grid;
   gap: 14px;
 }
@@ -488,20 +482,7 @@ html.weibo-grid-reader-detail-open {
   gap: 10px;
 }
 
-.weibo-grid-reader__detail-person {
-  display: flex;
-  gap: 10px;
-}
-
 .weibo-grid-reader__comment-avatar {
-  background: #f2f2f2;
-  border-radius: 50%;
-  height: 32px;
-  object-fit: cover;
-  width: 32px;
-}
-
-.weibo-grid-reader__detail-person-avatar {
   background: #f2f2f2;
   border-radius: 50%;
   height: 32px;
@@ -515,28 +496,11 @@ html.weibo-grid-reader-detail-open {
   min-width: 0;
 }
 
-.weibo-grid-reader__detail-person > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
 .weibo-grid-reader__comment strong {
   font-size: 13px;
 }
 
-.weibo-grid-reader__detail-person strong {
-  font-size: 13px;
-}
-
 .weibo-grid-reader__comment p {
-  font-size: 13px;
-  line-height: 1.5;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.weibo-grid-reader__detail-person p {
   font-size: 13px;
   line-height: 1.5;
   margin: 0;
@@ -559,65 +523,11 @@ html.weibo-grid-reader-detail-open {
   overscroll-behavior: contain;
 }
 
-.weibo-grid-reader__detail-tabs {
-  border-bottom: 1px solid #f2e7d9;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 10px 8px 8px;
-}
-
-.weibo-grid-reader__detail-tab {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  color: #777;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 2px;
-}
-
-.weibo-grid-reader__detail-tab:hover,
-.weibo-grid-reader__detail-tab--active {
-  background: #fff0df;
-  color: #ff8200;
-}
-
-.weibo-grid-reader__detail-tab strong {
-  color: currentColor;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.weibo-grid-reader__detail-tab span {
-  font-size: 11px;
-}
-
 .weibo-grid-reader__detail-side-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 14px;
-}
-
-.weibo-grid-reader__detail-info {
-  color: #666;
-  display: grid;
-  gap: 8px;
-  line-height: 1.6;
-}
-
-.weibo-grid-reader__detail-info strong {
-  color: #333;
-  font-size: 14px;
-}
-
-.weibo-grid-reader__detail-info p {
-  font-size: 13px;
-  margin: 0;
 }
 
 .weibo-grid-reader__detail-original {
@@ -635,8 +545,10 @@ html.weibo-grid-reader-detail-open {
   align-items: center;
   display: flex;
   gap: 8px;
-  justify-content: flex-start;
+  justify-content: center;
   margin: 8px 14px 14px;
+  min-height: 30px;
+  position: relative;
 }
 
 .weibo-grid-reader__detail-source-avatar {
@@ -644,6 +556,8 @@ html.weibo-grid-reader-detail-open {
   border-radius: 50%;
   height: 28px;
   object-fit: cover;
+  position: absolute;
+  left: 0;
   width: 28px;
 }
 
@@ -940,8 +854,7 @@ html.weibo-grid-reader-detail-open {
 
   .weibo-grid-reader__detail-dialog {
     grid-template-columns: minmax(0, 1fr);
-    max-height: calc(100vh - 24px);
-    min-height: 0;
+    height: calc(100vh - 24px);
     overflow-y: auto;
     width: calc(100vw - 24px);
   }
@@ -951,7 +864,7 @@ html.weibo-grid-reader-detail-open {
   }
 
   .weibo-grid-reader__detail-dialog--image-focus {
-    height: auto;
+    height: calc(100vh - 24px);
   }
 
   .weibo-grid-reader__detail-main {
@@ -992,8 +905,8 @@ html.weibo-grid-reader-detail-open {
   }
 
   .weibo-grid-reader__detail-side-content {
-    max-height: 280px;
-    overflow-y: visible;
+    max-height: none;
+    overflow-y: auto;
   }
 
   .weibo-grid-reader__detail-original {
