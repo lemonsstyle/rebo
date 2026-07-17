@@ -27,7 +27,8 @@
   let readerGeneration = 0;
   let readerFailedRouteKey = "";
   let refreshTimer = null;
-  let masonryTimer = null;
+  let masonryFrame = 0;
+  let loadMoreFrame = 0;
   let readerResizeObserver = null;
   let observedReaderWidth = 0;
   let activeDetailStatusId = "";
@@ -293,8 +294,25 @@
   }
 
   function scheduleMasonryLayout() {
-    window.clearTimeout(masonryTimer);
-    masonryTimer = window.setTimeout(layoutMasonry, 0);
+    if (masonryFrame) {
+      return;
+    }
+
+    masonryFrame = window.requestAnimationFrame(() => {
+      masonryFrame = 0;
+      layoutMasonry();
+    });
+  }
+
+  function scheduleLoadMore() {
+    if (loadMoreFrame) {
+      return;
+    }
+
+    loadMoreFrame = window.requestAnimationFrame(() => {
+      loadMoreFrame = 0;
+      loadMoreWhenNearEnd();
+    });
   }
 
   function mountReaderSurface() {
@@ -329,7 +347,10 @@
     readerGeneration += 1;
     readerFailedRouteKey = "";
     readerSeenIds.clear();
-    window.clearTimeout(masonryTimer);
+    window.cancelAnimationFrame(masonryFrame);
+    masonryFrame = 0;
+    window.cancelAnimationFrame(loadMoreFrame);
+    loadMoreFrame = 0;
     sentinelObserver?.disconnect();
     sentinelObserver = null;
     readerResizeObserver?.disconnect();
@@ -415,44 +436,114 @@
     return "https://weibo.com/";
   }
 
-  function getPictureUrls(status) {
-    const pictureInfos = status.pic_infos;
-    if (!pictureInfos || typeof pictureInfos !== "object") {
-      return [];
+  function getMixedMediaItems(status) {
+    const sources = [
+      status.mix_media_info?.items,
+      status.mix_media_info?.media_items,
+      status.page_info?.mix_media_info?.items,
+      status.pageInfo?.mix_media_info?.items
+    ];
+    return sources.filter(Array.isArray).flat();
+  }
+
+  function getPictureUrl(picture) {
+    if (!picture || typeof picture !== "object") {
+      return "";
     }
 
-    const pictureIds = status.pic_ids?.length ? status.pic_ids : Object.keys(pictureInfos);
-    return pictureIds
-      .map((pictureId) => pictureInfos[pictureId])
-      .filter((picture) => picture && typeof picture === "object")
-      .map((picture) => picture.largest?.url
-        || picture.large?.url
-        || picture.original?.url
-        || picture.mw2000?.url
-        || picture.thumbnail?.url
-        || "")
-      .filter(Boolean);
+    return picture.largest?.url
+      || picture.large?.url
+      || picture.original?.url
+      || picture.mw2000?.url
+      || picture.pic_big?.url
+      || picture.pic_small?.url
+      || picture.bmiddle?.url
+      || picture.thumbnail?.url
+      || picture.url
+      || "";
+  }
+
+  function getPictureUrls(status) {
+    const urls = [];
+    const addPicture = (picture) => {
+      const url = getPictureUrl(picture);
+      if (url && !urls.includes(url)) {
+        urls.push(url);
+      }
+    };
+
+    const pictureInfos = status.pic_infos;
+    if (pictureInfos && typeof pictureInfos === "object") {
+      const pictureIds = status.pic_ids?.length ? status.pic_ids : Object.keys(pictureInfos);
+      pictureIds.forEach((pictureId) => addPicture(pictureInfos[pictureId]));
+    }
+
+    for (const item of getMixedMediaItems(status)) {
+      const data = item?.data || item;
+      const type = String(item?.type || data?.type || data?.object_type || "").toLowerCase();
+      const pictureInfo = data?.pic_info || data?.picInfo || item?.pic_info || item?.picInfo || data?.picture;
+      if (pictureInfo || type === "pic" || type === "image") {
+        addPicture(pictureInfo || data);
+      }
+    }
+
+    return urls;
   }
 
   function getVideoMedia(status) {
-    const pageInfo = status.page_info || status.pageInfo;
-    const mediaInfo = pageInfo?.media_info || pageInfo?.mediaInfo || {};
-    const playbackSource = mediaInfo.playback_list?.find((item) => item.play_info?.url)?.play_info?.url;
-    const source = mediaInfo.stream_url_hd
-      || mediaInfo.stream_url
-      || mediaInfo.mp4_hd_url
-      || mediaInfo.mp4_sd_url
-      || playbackSource
-      || "";
+    const pageInfo = status.page_info || status.pageInfo || {};
+    const candidates = [{
+      mediaInfo: pageInfo.media_info || pageInfo.mediaInfo || {},
+      pageInfo
+    }];
 
-    if (!source) {
+    for (const item of getMixedMediaItems(status)) {
+      const data = item?.data || item || {};
+      const type = String(item?.type || data?.type || data?.object_type || "").toLowerCase();
+      const mediaInfo = data.media_info || data.mediaInfo || item?.media_info || item?.mediaInfo || {};
+      if (type === "video" || Object.keys(mediaInfo).length) {
+        candidates.push({ mediaInfo, pageInfo: data });
+      }
+    }
+
+    for (const candidate of candidates) {
+      const { mediaInfo, pageInfo: sourcePageInfo } = candidate;
+      const playbackSource = mediaInfo.playback_list?.find((item) => item.play_info?.url)?.play_info?.url;
+      const source = mediaInfo.stream_url_hd
+        || mediaInfo.stream_url
+        || mediaInfo.mp4_hd_url
+        || mediaInfo.mp4_sd_url
+        || playbackSource
+        || "";
+      if (source) {
+        return {
+          source,
+          poster: sourcePageInfo?.page_pic || mediaInfo.poster || "",
+          pageUrl: sourcePageInfo?.page_url || ""
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function getArticleMedia(status) {
+    const pageInfo = status.page_info || status.pageInfo || {};
+    const type = String(pageInfo.type || pageInfo.object_type || pageInfo.objectType || "").toLowerCase();
+    const pageUrl = pageInfo.page_url || pageInfo.pageUrl || pageInfo.url || "";
+    const isArticle = type.includes("article") || /(?:ttarticle|article\.weibo\.com)/i.test(pageUrl);
+    if (!isArticle || !pageUrl) {
       return null;
     }
 
+    const cover = typeof pageInfo.page_pic === "string"
+      ? pageInfo.page_pic
+      : getPictureUrl(pageInfo.page_pic || pageInfo.pic_info || pageInfo.picInfo);
     return {
-      source,
-      poster: pageInfo?.page_pic || mediaInfo.poster || "",
-      pageUrl: pageInfo?.page_url || ""
+      title: pageInfo.page_title || pageInfo.title || "微博文章",
+      description: pageInfo.page_desc || pageInfo.desc || pageInfo.content2 || "",
+      cover,
+      url: pageUrl
     };
   }
 
@@ -483,7 +574,128 @@
     }
   }
 
-  function appendRichStatusText(container, status) {
+  function createRichLink(href, textContent = "", preserveReferrer = false) {
+    const link = document.createElement("a");
+    link.className = "weibo-grid-reader__rich-link";
+    link.href = href;
+    link.target = "_blank";
+    link.rel = preserveReferrer ? "noopener" : "noopener noreferrer";
+    link.textContent = textContent;
+    link.addEventListener("click", (event) => event.stopPropagation());
+    return link;
+  }
+
+  function isCommentImageUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.hostname === "t.cn"
+        || (/(^|\.)sinaimg\.cn$/i.test(url.hostname) && /\.(?:avif|gif|jpe?g|png|webp)$/i.test(url.pathname));
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeCommentImageUrl(value) {
+    const url = new URL(value, window.location.href);
+    if (url.hostname === "t.cn") {
+      url.protocol = "https:";
+    }
+    return url.href;
+  }
+
+  function getNativeImageViewerUrl() {
+    const url = new URL(window.location.href);
+    url.hash = "&viewer";
+    return url.href;
+  }
+
+  function closeCommentImagePreview() {
+    getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer")?.remove();
+  }
+
+  function openCommentImagePreview(url) {
+    const dialog = getDetailOverlay()?.querySelector(".weibo-grid-reader__detail-dialog");
+    if (!dialog) {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+
+    closeCommentImagePreview();
+    const layer = document.createElement("section");
+    layer.className = "weibo-grid-reader__comment-image-preview-layer";
+    layer.setAttribute("aria-label", "评论图片预览");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "weibo-grid-reader__comment-image-preview-close";
+    close.setAttribute("aria-label", "关闭图片预览");
+    close.textContent = "×";
+    close.addEventListener("click", closeCommentImagePreview);
+    const image = document.createElement("img");
+    image.className = "weibo-grid-reader__comment-image-preview-full";
+    image.alt = "评论图片";
+    image.referrerPolicy = "unsafe-url";
+    image.src = normalizeCommentImageUrl(url);
+    layer.append(close, image);
+    layer.addEventListener("click", (event) => {
+      if (event.target === layer) {
+        closeCommentImagePreview();
+      }
+    });
+    dialog.append(layer);
+  }
+
+  function createCommentImagePreview(url) {
+    const preview = document.createElement("span");
+    preview.className = "weibo-grid-reader__comment-image-preview";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "weibo-grid-reader__comment-image-thumbnail";
+    button.setAttribute("aria-label", "预览评论图片");
+    button.addEventListener("click", () => openCommentImagePreview(url));
+    const image = document.createElement("img");
+    image.alt = "评论图片";
+    image.loading = "lazy";
+    image.referrerPolicy = "unsafe-url";
+    image.src = normalizeCommentImageUrl(url);
+    image.addEventListener("load", () => preview.classList.add("weibo-grid-reader__comment-image-preview--loaded"), { once: true });
+    image.addEventListener("error", () => {
+      button.remove();
+      preview.classList.add("weibo-grid-reader__comment-image-preview--failed");
+    }, { once: true });
+    button.append(image);
+    const fallback = createRichLink(getNativeImageViewerUrl(), "在微博中查看图片", true);
+    fallback.classList.add("weibo-grid-reader__comment-image-fallback");
+    fallback.target = "_self";
+    fallback.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeDetail(false);
+      window.location.assign(fallback.href);
+    });
+    preview.append(button, fallback);
+    return preview;
+  }
+
+  function appendPlainTextWithLinks(container, value, renderCommentImages = false) {
+    const source = String(value || "");
+    const urlPattern = /https?:\/\/[^\s<]+/g;
+    let previousEnd = 0;
+
+    for (const match of source.matchAll(urlPattern)) {
+      const matchIndex = match.index || 0;
+      container.append(source.slice(previousEnd, matchIndex));
+      const url = getSafeLinkHref(match[0]);
+      if (url && renderCommentImages && isCommentImageUrl(url)) {
+        container.append(createCommentImagePreview(url));
+      } else {
+        container.append(url ? createRichLink(url, match[0]) : match[0]);
+      }
+      previousEnd = matchIndex + match[0].length;
+    }
+
+    container.append(source.slice(previousEnd));
+  }
+
+  function appendRichStatusText(container, status, linkifyText = false, renderCommentImages = false) {
     const template = document.createElement("template");
     const source = status.text || status.text_raw || "";
     const hideVideoLink = Boolean(getVideoMedia(status));
@@ -493,7 +705,11 @@
       for (const node of nodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           const text = hideVideoLink ? node.textContent.replace(/https?:\/\/\S+/g, "") : node.textContent;
-          target.append(text);
+          if (linkifyText) {
+            appendPlainTextWithLinks(target, text, renderCommentImages);
+          } else {
+            target.append(text);
+          }
           continue;
         }
 
@@ -523,12 +739,11 @@
         if (node.tagName === "A") {
           const href = getSafeLinkHref(node.getAttribute("href") || "");
           if (href) {
-            const link = document.createElement("a");
-            link.className = "weibo-grid-reader__rich-link";
-            link.href = href;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.addEventListener("click", (event) => event.stopPropagation());
+            if (renderCommentImages && isCommentImageUrl(href)) {
+              target.append(createCommentImagePreview(href));
+              continue;
+            }
+            const link = createRichLink(href);
             target.append(link);
             appendNodes(node.childNodes, link);
             continue;
@@ -546,7 +761,7 @@
     appendRichStatusText(container, {
       text: comment.text || comment.text_raw || "",
       page_info: null
-    });
+    }, true, true);
   }
 
   function createTextBlock(className, status) {
@@ -716,16 +931,58 @@
     return videoWrap;
   }
 
+  function createArticleMedia(status) {
+    const article = getArticleMedia(status);
+    if (!article) {
+      return null;
+    }
+
+    const link = document.createElement("a");
+    link.className = "weibo-grid-reader__article-media";
+    link.href = article.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.addEventListener("click", (event) => event.stopPropagation());
+
+    if (article.cover) {
+      const cover = document.createElement("img");
+      cover.className = "weibo-grid-reader__article-cover";
+      cover.alt = "";
+      cover.loading = "lazy";
+      cover.src = article.cover;
+      cover.addEventListener("error", () => cover.remove(), { once: true });
+      link.append(cover);
+    }
+
+    const content = document.createElement("div");
+    content.className = "weibo-grid-reader__article-content";
+    const label = document.createElement("span");
+    label.textContent = "微博文章";
+    const title = document.createElement("strong");
+    title.textContent = article.title;
+    content.append(label, title);
+    if (article.description) {
+      const description = document.createElement("p");
+      description.textContent = article.description;
+      content.append(description);
+    }
+
+    link.append(content);
+    return link;
+  }
+
   function createStatusMedia(status) {
     const video = createVideoMedia(status);
     const pictures = createPictureMedia(status);
-    if (!video || !pictures) {
-      return video || pictures;
+    const article = createArticleMedia(status);
+    const mediaItems = [video, pictures, article].filter(Boolean);
+    if (mediaItems.length < 2) {
+      return mediaItems[0] || null;
     }
 
     const media = document.createElement("div");
     media.className = "weibo-grid-reader__status-media-stack";
-    media.append(video, pictures);
+    media.append(...mediaItems);
     return media;
   }
 
@@ -941,15 +1198,21 @@
   function createDetailMedia(status) {
     const video = createVideoMedia(status);
     const pictures = createDetailPictures(getPictureUrls(status));
-    if (!video || !pictures.media) {
-      return video
-        ? { media: video, rail: null, isImage: false }
-        : pictures;
+    const article = createArticleMedia(status);
+    const mediaItems = [video, pictures.media, article].filter(Boolean);
+    if (mediaItems.length < 2) {
+      if (video) {
+        return { media: video, rail: null, isImage: false };
+      }
+      if (pictures.media) {
+        return pictures;
+      }
+      return { media: article, rail: null, isImage: false };
     }
 
     const media = document.createElement("div");
     media.className = "weibo-grid-reader__detail-media-stack";
-    media.append(video, pictures.media);
+    media.append(...mediaItems);
     return { media, rail: pictures.rail, isImage: false };
   }
 
@@ -992,7 +1255,7 @@
     if (hasRichStatusText(comment)) {
       appendRichCommentText(text, comment);
     } else {
-      text.textContent = comment.text_raw || plainText(comment.text) || "";
+      appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true);
     }
     content.append(name, text);
 
@@ -1074,7 +1337,7 @@
     }
 
     const origin = event.target instanceof Element ? event.target : null;
-    const scrollTarget = origin?.closest(
+    let scrollTarget = origin?.closest(
       ".weibo-grid-reader__detail-image-viewer, .weibo-grid-reader__detail-text, .weibo-grid-reader__detail-side-content, .weibo-grid-reader__detail-main, .weibo-grid-reader__detail-thumbnail-rail"
     );
     event.preventDefault();
@@ -1091,6 +1354,33 @@
         scrollTarget.scrollLeft += event.deltaX || event.deltaY;
       }
       return;
+    }
+
+    if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
+      scrollTarget.scrollLeft += event.deltaX || event.deltaY;
+      return;
+    }
+
+    if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer")) {
+      const hasVerticalOverflow = scrollTarget.scrollHeight > scrollTarget.clientHeight;
+      const movingUp = event.deltaY < 0;
+      const canScrollImage = hasVerticalOverflow && (movingUp
+        ? scrollTarget.scrollTop > 0
+        : scrollTarget.scrollTop + scrollTarget.clientHeight < scrollTarget.scrollHeight - 1);
+
+      if (canScrollImage) {
+        scrollTarget.scrollTop += event.deltaY;
+        return;
+      }
+
+      scrollTarget = scrollTarget.closest(".weibo-grid-reader__detail-main") || scrollTarget;
+    }
+
+    if (
+      !scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer")
+      && !scrollTarget.classList.contains("weibo-grid-reader__detail-side-content")
+    ) {
+      scrollTarget = scrollTarget.closest(".weibo-grid-reader__detail-main") || scrollTarget;
     }
 
     scrollTarget.scrollTop += event.deltaY;
@@ -1119,11 +1409,15 @@
     const dialog = document.createElement("div");
     dialog.className = "weibo-grid-reader__detail-dialog";
     const detailMedia = createDetailMedia(status);
+    const isTextOnlyDetail = !detailMedia.media && !status.retweeted_status;
     const main = document.createElement("main");
     main.className = "weibo-grid-reader__detail-main";
     if (detailMedia.isImage && !status.retweeted_status) {
       main.classList.add("weibo-grid-reader__detail-main--image-focus");
       dialog.classList.add("weibo-grid-reader__detail-dialog--image-focus");
+    }
+    if (isTextOnlyDetail) {
+      dialog.classList.add("weibo-grid-reader__detail-dialog--text-only");
     }
     main.append(createDetailPost(status, false, detailMedia.media));
 
@@ -1213,7 +1507,7 @@
 
     grid.append(...cards);
     scheduleMasonryLayout();
-    window.setTimeout(loadMoreWhenNearEnd, 50);
+    scheduleLoadMore();
     return cards.length;
   }
 
@@ -1533,13 +1827,25 @@
       synchronizeReader();
       updatePageClasses();
       scheduleMasonryLayout();
-      loadMoreWhenNearEnd();
+      scheduleLoadMore();
     }, 100);
   }
 
+  function mutationNeedsRefresh(mutations) {
+    const relevantSelector = ".vue-recycle-scroller, .woo-panel-left, .wbpro-side, div.scale";
+    return mutations.some((mutation) => [...mutation.addedNodes].some((node) => {
+      if (!(node instanceof Element)) {
+        return false;
+      }
+      return node.matches(relevantSelector) || Boolean(node.querySelector(relevantSelector));
+    }));
+  }
+
   function observePage() {
-    const observer = new MutationObserver(() => {
-      refreshPage();
+    const observer = new MutationObserver((mutations) => {
+      if (mutationNeedsRefresh(mutations)) {
+        refreshPage();
+      }
     });
 
     observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -1547,7 +1853,7 @@
       refreshPage();
       repositionActiveDetail();
     }, { passive: true });
-    window.addEventListener("scroll", loadMoreWhenNearEnd, { passive: true });
+    window.addEventListener("scroll", scheduleLoadMore, { passive: true });
     window.addEventListener("popstate", () => {
       if (activeDetailStatusId) {
         closeDetail(false);
