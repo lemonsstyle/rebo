@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const CHANNEL = "weibo-grid-reader-v2";
+  const CHANNEL = "weibo-grid-reader-v4";
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
@@ -37,6 +37,7 @@
   let readerRetryAttempt = 0;
   let readerSelectionRouteKey = "";
   let readerSelectionStartedAt = 0;
+  let routeSyncTimer = 0;
   let refreshTimer = null;
   let masonryFrame = 0;
   let loadMoreFrame = 0;
@@ -503,12 +504,44 @@
     }
   }
 
+  function cancelRouteSync() {
+    if (routeSyncTimer) {
+      window.clearTimeout(routeSyncTimer);
+      routeSyncTimer = 0;
+    }
+  }
+
+  function scheduleRouteSync(targetRouteKey) {
+    cancelRouteSync();
+    const deadline = Date.now() + 1200;
+
+    const synchronizeWhenReady = () => {
+      routeSyncTimer = 0;
+      if (!hasValidExtensionContext() || !settings.readerEnabled) {
+        return;
+      }
+
+      if (getReaderRouteKey() === targetRouteKey) {
+        refreshPage(true);
+        return;
+      }
+
+      if (Date.now() < deadline) {
+        routeSyncTimer = window.setTimeout(synchronizeWhenReady, 40);
+      }
+    };
+
+    routeSyncTimer = window.setTimeout(synchronizeWhenReady, 0);
+  }
+
   function scheduleReaderRetry(routeKey = readerRouteKey) {
     if (readerRetryTimer || !routeKey) {
       return;
     }
 
-    const delay = Math.min(4000, 400 * (2 ** Math.min(readerRetryAttempt, 4)));
+    const delay = readerRetryAttempt === 0
+      ? 150
+      : Math.min(4000, 400 * (2 ** Math.min(readerRetryAttempt - 1, 4)));
     readerRetryAttempt += 1;
     readerRetryTimer = window.setTimeout(() => {
       readerRetryTimer = 0;
@@ -534,6 +567,7 @@
   function unmountReaderSurface() {
     closeDetail(false);
     cancelReaderRetry();
+    cancelRouteSync();
     deactivateReaderSurface();
     mountedScroller = null;
     readerRouteKey = "";
@@ -2373,6 +2407,7 @@
       : Date.now();
     const result = await bridgeRequest("fetch-timeline", {
       query: getFeedQuery(),
+      routeKey,
       requestedAt
     });
     readerLoading = false;
@@ -2676,13 +2711,14 @@
     });
   }
 
-  function refreshPage() {
+  function refreshPage(immediate = false) {
     if (!hasValidExtensionContext()) {
       return;
     }
 
     window.clearTimeout(refreshTimer);
-    refreshTimer = window.setTimeout(() => {
+    const synchronize = () => {
+      refreshTimer = null;
       if (!hasValidExtensionContext()) {
         return;
       }
@@ -2698,7 +2734,14 @@
       updatePageClasses();
       scheduleMasonryLayout();
       scheduleLoadMore();
-    }, 100);
+    };
+
+    if (immediate) {
+      synchronize();
+      return;
+    }
+
+    refreshTimer = window.setTimeout(synchronize, 100);
   }
 
   function mutationNeedsRefresh(mutations) {
@@ -2757,6 +2800,7 @@
       readerSelectionRouteKey = targetRouteKey;
       readerSelectionStartedAt = Date.now();
       if (targetRouteKey !== readerRouteKey) {
+        scheduleRouteSync(targetRouteKey);
         return;
       }
 

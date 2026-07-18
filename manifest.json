@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "微博网格阅读器",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "为微博首页信息流提供宽屏阅读、右侧抽屉和虚拟列表兼容的多列布局。",
   "permissions": ["storage"],
   "host_permissions": ["https://weibo.com/*", "https://www.weibo.com/*"],

@@ -1,8 +1,11 @@
 (() => {
   "use strict";
 
-  const CHANNEL = "weibo-grid-reader-v2";
-  const officialTimelineByGroup = new Map();
+  const CHANNEL = "weibo-grid-reader-v4";
+  const OBSERVED_TIMELINE_WAIT_MS = 320;
+  const TIMELINE_ENDPOINT_WAIT_MS = 600;
+  const officialTimelineByRoute = new Map();
+  const observedTimelineEndpointByRoute = new Map();
   let readerTimelineRequestDepth = 0;
 
   function respond(requestId, payload) {
@@ -40,7 +43,28 @@
   function getTimelineGroupId(endpoint) {
     return endpoint.searchParams.get("list_id")
       || endpoint.searchParams.get("fid")
+      || endpoint.searchParams.get("group_id")
       || "";
+  }
+
+  function getFeedRouteKey(value = window.location.href) {
+    try {
+      const url = new URL(value, window.location.href);
+      if (
+        url.origin !== window.location.origin
+        || (url.pathname !== "/" && url.pathname !== "/mygroups")
+      ) {
+        return "";
+      }
+      return `${url.pathname}?gid=${url.searchParams.get("gid") || ""}`;
+    } catch {
+      return "";
+    }
+  }
+
+  function resolveFeedRouteKey(routeKey) {
+    const currentRouteKey = getFeedRouteKey();
+    return routeKey && routeKey === currentRouteKey ? routeKey : currentRouteKey;
   }
 
   function getRequestUrl(input) {
@@ -60,26 +84,49 @@
       );
   }
 
-  function storeOfficialTimeline(endpoint, payload) {
+  function rememberTimelineEndpoint(endpoint, routeKey) {
+    const resolvedRouteKey = getFeedRouteKey(routeKey);
+    if (!resolvedRouteKey || !isTimelineEndpoint(endpoint)) {
+      return "";
+    }
+
+    observedTimelineEndpointByRoute.set(resolvedRouteKey, endpoint.href);
+    return resolvedRouteKey;
+  }
+
+  function forgetTimelineEndpoint(routeKey, endpointHref) {
+    const resolvedRouteKey = resolveFeedRouteKey(routeKey);
+    if (observedTimelineEndpointByRoute.get(resolvedRouteKey) === endpointHref) {
+      observedTimelineEndpointByRoute.delete(resolvedRouteKey);
+    }
+  }
+
+  function storeOfficialTimeline(endpoint, payload, routeKey) {
+    const resolvedRouteKey = rememberTimelineEndpoint(endpoint, routeKey);
+    if (!resolvedRouteKey) {
+      return;
+    }
+
     const maxId = endpoint.searchParams.get("max_id");
     if (!Array.isArray(payload?.statuses) || (maxId && maxId !== "0")) {
       return;
     }
 
-    officialTimelineByGroup.set(getTimelineGroupId(endpoint), {
+    officialTimelineByRoute.set(resolvedRouteKey, {
       payload,
       receivedAt: Date.now()
     });
   }
 
-  function observeFetchTimeline(input, response) {
+  function observeFetchTimeline(input, response, routeKey) {
     const endpoint = getRequestUrl(input);
     if (!isTimelineEndpoint(endpoint) || !response.ok) {
       return;
     }
 
+    rememberTimelineEndpoint(endpoint, routeKey);
     void response.clone().json().then((payload) => {
-      storeOfficialTimeline(endpoint, payload);
+      storeOfficialTimeline(endpoint, payload, routeKey);
     }).catch(() => {});
   }
 
@@ -87,9 +134,14 @@
     const nativeFetch = window.fetch.bind(window);
     window.fetch = function observedFetch(input, init) {
       const shouldObserve = readerTimelineRequestDepth === 0;
+      const routeKey = getFeedRouteKey();
+      const endpoint = getRequestUrl(input);
+      if (shouldObserve) {
+        rememberTimelineEndpoint(endpoint, routeKey);
+      }
       const responsePromise = nativeFetch(input, init);
       if (shouldObserve) {
-        void responsePromise.then((response) => observeFetchTimeline(input, response)).catch(() => {});
+        void responsePromise.then((response) => observeFetchTimeline(input, response, routeKey)).catch(() => {});
       }
       return responsePromise;
     };
@@ -98,19 +150,21 @@
     const nativeSend = XMLHttpRequest.prototype.send;
     const requestUrls = new WeakMap();
     XMLHttpRequest.prototype.open = function observedOpen(method, url, ...rest) {
-      requestUrls.set(this, getRequestUrl(url));
+      requestUrls.set(this, { endpoint: getRequestUrl(url), routeKey: getFeedRouteKey() });
       return nativeOpen.call(this, method, url, ...rest);
     };
     XMLHttpRequest.prototype.send = function observedSend(...args) {
-      const endpoint = requestUrls.get(this);
+      const request = requestUrls.get(this);
+      const endpoint = request?.endpoint;
       if (readerTimelineRequestDepth === 0 && isTimelineEndpoint(endpoint)) {
+        rememberTimelineEndpoint(endpoint, request.routeKey);
         this.addEventListener("loadend", () => {
           if (this.status < 200 || this.status >= 300) {
             return;
           }
           try {
             const payload = this.responseType === "json" ? this.response : JSON.parse(this.responseText);
-            storeOfficialTimeline(endpoint, payload);
+            storeOfficialTimeline(endpoint, payload, request.routeKey);
           } catch {
             return;
           }
@@ -131,7 +185,7 @@
       }
 
       const observedGroupId = getTimelineGroupId(endpoint);
-      if (requestedGroupId ? observedGroupId === requestedGroupId : !observedGroupId) {
+      if (requestedGroupId ? observedGroupId === requestedGroupId : endpoint.pathname === "/ajax/feed/friendstimeline") {
         return endpoint;
       }
     }
@@ -139,13 +193,19 @@
     return null;
   }
 
-  async function getTimelineEndpoint(query) {
+  async function getTimelineEndpoint(query, routeKey) {
+    const resolvedRouteKey = resolveFeedRouteKey(routeKey);
+    const rememberedEndpoint = observedTimelineEndpointByRoute.get(resolvedRouteKey);
+    if (rememberedEndpoint) {
+      return new URL(rememberedEndpoint, window.location.href);
+    }
+
     const initialEndpoint = findObservedTimelineEndpoint(query);
     if (initialEndpoint) {
       return initialEndpoint;
     }
 
-    const deadline = performance.now() + 1200;
+    const deadline = performance.now() + TIMELINE_ENDPOINT_WAIT_MS;
     while (performance.now() < deadline) {
       await new Promise((resolve) => window.setTimeout(resolve, 60));
       const observedEndpoint = findObservedTimelineEndpoint(query);
@@ -157,14 +217,22 @@
     return null;
   }
 
-  async function waitForOfficialTimeline(query, requestedAt) {
-    const groupId = String(query?.list_id || query?.fid || "");
-    const deadline = performance.now() + 1200;
+  function getFreshOfficialTimeline(routeKey, requestedAt) {
+    const resolvedRouteKey = resolveFeedRouteKey(routeKey);
+    const timeline = officialTimelineByRoute.get(resolvedRouteKey);
+    if (timeline && timeline.receivedAt >= requestedAt) {
+      return timeline.payload;
+    }
+    return null;
+  }
+
+  async function waitForOfficialTimeline(routeKey, requestedAt) {
+    const deadline = performance.now() + OBSERVED_TIMELINE_WAIT_MS;
 
     while (performance.now() < deadline) {
-      const timeline = officialTimelineByGroup.get(groupId);
-      if (timeline && timeline.receivedAt >= requestedAt) {
-        return timeline.payload;
+      const payload = getFreshOfficialTimeline(routeKey, requestedAt);
+      if (payload) {
+        return payload;
       }
       await new Promise((resolve) => window.setTimeout(resolve, 60));
     }
@@ -200,9 +268,26 @@
     throw new Error(`微博信息流请求失败（HTTP ${lastResponse?.status || "未知"}）。`);
   }
 
-  async function fetchTimeline(query, requestedAt = 0) {
+  async function fetchTimeline(query, routeKey, requestedAt = 0) {
     if (!query?.max_id) {
-      const officialPayload = await waitForOfficialTimeline(query, Number(requestedAt) || 0);
+      const freshRequestedAt = Number(requestedAt) || 0;
+      const immediateOfficialPayload = getFreshOfficialTimeline(routeKey, freshRequestedAt);
+      if (immediateOfficialPayload) {
+        return {
+          ok: true,
+          payload: {
+            statuses: immediateOfficialPayload.statuses,
+            maxId: immediateOfficialPayload.max_id ?? immediateOfficialPayload.max_id_str ?? "",
+            sinceId: immediateOfficialPayload.since_id ?? immediateOfficialPayload.since_id_str ?? ""
+          }
+        };
+      }
+
+      const resolvedRouteKey = resolveFeedRouteKey(routeKey);
+      const hasEndpointTemplate = observedTimelineEndpointByRoute.has(resolvedRouteKey);
+      const officialPayload = hasEndpointTemplate
+        ? null
+        : await waitForOfficialTimeline(routeKey, freshRequestedAt);
       if (officialPayload) {
         return {
           ok: true,
@@ -215,10 +300,12 @@
       }
     }
 
-    const endpoint = await getTimelineEndpoint(query);
+    const endpoint = await getTimelineEndpoint(query, routeKey);
     if (!endpoint) {
       return { ok: false, reason: "尚未捕获当前分组的微博官方信息流请求。" };
     }
+
+    const endpointHref = endpoint.href;
 
     endpoint.searchParams.delete("since_id");
     endpoint.searchParams.delete("max_id");
@@ -232,6 +319,7 @@
     try {
       const payload = await requestTimeline(endpoint);
       if (!Array.isArray(payload.statuses)) {
+        forgetTimelineEndpoint(routeKey, endpointHref);
         return { ok: false, reason: "微博信息流响应中没有 statuses 数组。" };
       }
 
@@ -244,6 +332,7 @@
         }
       };
     } catch (error) {
+      forgetTimelineEndpoint(routeKey, endpointHref);
       return {
         ok: false,
         reason: error instanceof Error ? error.message : "微博信息流请求失败。"
@@ -323,7 +412,7 @@
     }
 
     if (message.type === "fetch-timeline") {
-      void fetchTimeline(message.query, message.requestedAt).then((result) => {
+      void fetchTimeline(message.query, message.routeKey, message.requestedAt).then((result) => {
         respond(message.requestId, result);
       });
     }
