@@ -12,13 +12,14 @@ English version: [Read in English](#en)
 
 完整的架构、接口、滚动规则、隐私取舍与维护限制见：[技术总结](TECHNICAL_SUMMARY.md)。
 
-### expend4 更新
+### fatigue 更新
 
 - 详情右栏现在只保留评论列表，不再加载转发或点赞列表。
 - 打开详情后，滚轮只会滚动命中的详情内部区域：左侧正文、图片、缩略图列或右侧评论列表；背景信息流保持不动，关闭详情后恢复正常页面滚动。
 - 详情卡片使用固定高度，右栏评论内容在卡片内部滚动。
 - 同时包含视频和图片的微博会同时展示两类媒体；视频无法播放时，图片仍可显示。
-- 微博文本和评论中的 `t.cn` 与新浪图床图片链接会优先交给微博原生图片查看器；评论缩略图加载失败时也会回退到该查看器，而不是直接打开图床地址。
+- 微博正文和转发中的 `t.cn` 短链会作为普通外链打开；带标题或封面的外站网页、视频会显示可点击预览卡。已识别的新浪图床正文链接仍交给微博原生查看器，评论图片预览失败时也会回退到该查看器。
+- 详情图片只有在实际溢出超过可视区域约 `12%` 时才启用独立滚动；接近完整显示时会自动缩放以避免无意义的短距离滚动。
 
 ### 功能
 
@@ -26,9 +27,9 @@ English version: [Read in English](#en)
 - 默认隐藏原生右栏，扩大中间信息流，并使左侧分组导航在桌面宽度保持可见。
 - 点击悬浮按钮打开紧凑控制面板，可通过开关启用新布局，并拖动“稀疏 / 适中 / 密集”三档滑杆选择卡片密度（分别对应 `3 / 4 / 5` 列）。
 - 扩展从当前已登录的微博页面请求同一分组的信息流，在本地渲染响应式瀑布流卡片墙，不依赖微博纵向虚拟列表。
-- 多图微博会按图片方向组成紧凑拼图；视频微博使用原视频流预览；转发微博会显示被转发微博的作者、正文和媒体内容；长微博可在卡片中点击“展开全文”，详情卡片会自动请求并显示全文。
+- 多图微博会按图片方向组成紧凑拼图；视频微博使用原视频流预览；带元数据的外站网页或视频会显示封面预览；转发微博会显示被转发微博的作者、正文和媒体内容；长微博可在卡片中点击“展开全文”，详情卡片会自动请求并显示全文。
 - 下拉到卡片墙底部附近时，扩展使用响应中的 `max_id` 请求下一页；切换分组或从详情返回信息流后会重新挂载卡片墙。
-- 点击卡片会在原卡片附近打开详情层：背景轻微变暗，左侧显示正文和媒体，右侧显示评论。单张竖图可纵向滚动，横图可用滚轮横向浏览，多图可通过中间缩略图切换。
+- 点击卡片会在原卡片附近打开详情层：背景轻微变暗，左侧显示正文和媒体，右侧显示评论。接近显示区尺寸的单图会自动完整显示；明显超出显示区的竖图可纵向滚动、横图可用滚轮横向浏览，多图可通过中间缩略图切换。
 
 ### 本地安装
 
@@ -43,9 +44,9 @@ English version: [Read in English](#en)
 
 1. 切换“使用新布局”开关并拖动“稀疏 / 适中 / 密集”滑杆，确认卡片墙与原始信息流切换正常。
 2. 下拉至少三屏，确认卡片墙持续加载且没有行高空白。
-3. 点击图文、转发和视频卡片，确认普通链接不会误触发详情；微博图片链接会打开原生查看器，评论图片可在详情内预览并在失败时回退到原生查看器。
+3. 点击图文、转发、视频和外站预览卡，确认普通链接不会误触发详情；微博图片链接会打开原生查看器，评论图片可在详情内预览并在失败时回退到原生查看器。
 4. 打开详情后，在正文、图片和评论区分别滚动，确认只有命中的内部区域滚动，背景页面不滚动。
-5. 打开单图、多图和“视频+图片”微博，确认媒体可以正常展示与浏览。
+5. 打开单图、多图、“视频+图片”和外站视频微博，确认媒体可以正常展示与浏览；分别检查近适配单图不会独立滚动、明显长图或宽图仍可滚动浏览。
 
 ### 隐私与限制
 
@@ -63,13 +64,14 @@ A build-free Chrome / Edge Manifest V3 extension that improves reading Weibo's w
 
 For the detailed architecture, APIs, scrolling rules, privacy trade-offs, and maintenance limits, see the [technical summary (Chinese)](TECHNICAL_SUMMARY.md).
 
-### What Changed in expend4
+### What Changed in fatigue
 
 - The detail sidebar now contains comments only; repost and like lists are no longer requested or rendered.
 - While a detail card is open, wheel input is routed only to the detail area beneath the pointer: the post body, image viewer, thumbnail rail, or comments list. The background feed remains fixed until the detail card closes.
 - Detail cards have a fixed height, and long comments scroll inside the sidebar.
 - Posts that contain both video and pictures now render both media types. Pictures remain available if video playback fails.
-- `t.cn` and Sina image-host links in post text and comments are routed to Weibo's native image viewer; failed in-card comment previews also use that fallback instead of opening the image host directly.
+- `t.cn` links in post and repost text open as ordinary external links. External webpages and videos with returned preview metadata render as clickable cards. Recognized Sina image-host links still use Weibo's native viewer, and failed comment-image previews use that fallback.
+- Detail images receive their own scroll behavior only when actual overflow exceeds roughly `12%` of the viewport. Near-fitting images scale down to avoid a pointless short scroll.
 
 ### Features
 
@@ -77,9 +79,9 @@ For the detailed architecture, APIs, scrolling rules, privacy trade-offs, and ma
 - Hides the native right sidebar by default, widens the feed, and preserves the left group navigation on desktop screens.
 - Provides a compact switch to enable the reader and a draggable `Sparse / Balanced / Dense` density slider for `3 / 4 / 5` columns.
 - Requests the current logged-in user's feed for the active group and renders a local responsive masonry wall without relying on Weibo's vertical virtual list.
-- Builds compact direction-aware collages for multi-image posts, previews original video streams, displays quoted-post author, text, and media, and supports expanding long posts in cards or loading them automatically in detail cards.
+- Builds compact direction-aware collages for multi-image posts, previews original video streams and metadata-rich external webpages or videos, displays quoted-post author, text, and media, and supports expanding long posts in cards or loading them automatically in detail cards.
 - Requests additional pages using the returned `max_id` near the end of the wall, and remounts cleanly after group changes or returning from a detail view.
-- Opens an anchored detail card near the source post: the background dims slightly, the left side shows full text and media, and the right side shows comments. Portrait images scroll vertically, landscape images scroll horizontally with the wheel, and multi-image posts expose a thumbnail rail.
+- Opens an anchored detail card near the source post: the background dims slightly, the left side shows full text and media, and the right side shows comments. Near-fitting single images display in full, while overflowing portrait images scroll vertically and landscape images scroll horizontally with the wheel; multi-image posts expose a thumbnail rail.
 
 ### Local Installation
 
@@ -94,9 +96,9 @@ The reader is enabled with three columns by default. Layout and column preferenc
 
 1. Toggle the new-layout switch and drag the `Sparse / Balanced / Dense` slider; confirm switching between the card wall and native feed works.
 2. Scroll down at least three screen heights; confirm that more cards load without row-height gaps.
-3. Open image, repost, and video cards; ordinary links should not accidentally open the detail card, while Weibo image links should open the native viewer and comment images can preview in-card first.
+3. Open image, repost, video, and external-preview cards; ordinary links should not accidentally open the detail card, while Weibo image links should open the native viewer and comment images can preview in-card first.
 4. With a detail card open, scroll over the post body, images, and comments separately; only the pointed detail region should scroll, never the background feed.
-5. Check single-image, multi-image, and combined video-plus-image posts for correct media display and browsing.
+5. Check single-image, multi-image, combined video-plus-image, and external-video posts for correct media display and browsing; near-fitting images should not gain a separate scroll range, while clearly oversized images should remain scrollable.
 
 ### Privacy and Limitations
 

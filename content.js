@@ -15,6 +15,7 @@
     4: { label: "适中", description: "平衡阅读 · 4 列" },
     5: { label: "密集", description: "显示更多 · 5 列" }
   });
+  const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -42,6 +43,7 @@
   let masonryEpoch = 0;
   let activeDetailStatusId = "";
   let activeDetailAnchor = null;
+  let activeDetailImageFitObserver = null;
   let detailHistoryPushed = false;
   let lastUrl = window.location.href;
   const readerSeenIds = new Set();
@@ -703,6 +705,33 @@
     };
   }
 
+  function getExternalLinkMedia(status) {
+    if (getVideoMedia(status) || getArticleMedia(status)) {
+      return null;
+    }
+
+    const pageInfo = status.page_info || status.pageInfo || {};
+    const pageUrl = getSafeLinkHref(pageInfo.page_url || pageInfo.pageUrl || pageInfo.url || "");
+    const title = pageInfo.page_title || pageInfo.title || "";
+    const description = pageInfo.page_desc || pageInfo.desc || pageInfo.content2 || "";
+    const cover = typeof pageInfo.page_pic === "string"
+      ? pageInfo.page_pic
+      : getPictureUrl(pageInfo.page_pic || pageInfo.pic_info || pageInfo.picInfo);
+
+    if (!pageUrl || (!title && !description && !cover)) {
+      return null;
+    }
+
+    const type = String(pageInfo.type || pageInfo.object_type || pageInfo.objectType || "").toLowerCase();
+    return {
+      title: title || new URL(pageUrl).hostname,
+      description,
+      cover,
+      label: type.includes("video") ? "外部视频" : "网页链接",
+      url: pageUrl
+    };
+  }
+
   function formatCount(count) {
     const value = Number(count || 0);
     if (value >= 10000) {
@@ -732,7 +761,7 @@
 
   function createRichLink(href, textContent = "", preserveReferrer = false) {
     const link = document.createElement("a");
-    const imageViewerLink = isWeiboImageLink(href);
+    const imageViewerLink = isNativeImageLink(href);
     link.className = "weibo-grid-reader__rich-link";
     link.href = imageViewerLink ? getNativeImageViewerUrl() : href;
     link.target = imageViewerLink ? "_self" : "_blank";
@@ -753,7 +782,17 @@
     try {
       const url = new URL(value);
       return url.hostname === "t.cn"
-        || (/(^|\.)sinaimg\.cn$/i.test(url.hostname) && /\.(?:avif|gif|jpe?g|png|webp)$/i.test(url.pathname));
+        || isNativeImageLink(value);
+    } catch {
+      return false;
+    }
+  }
+
+  function isNativeImageLink(value) {
+    try {
+      const url = new URL(value);
+      return /(^|\.)sinaimg\.cn$/i.test(url.hostname)
+        && /\.(?:avif|gif|jpe?g|png|webp)$/i.test(url.pathname);
     } catch {
       return false;
     }
@@ -1009,9 +1048,9 @@
     container.replaceChildren();
     const displayText = getDisplayText(status);
     if (hasRichStatusText(status)) {
-      appendRichStatusText(container, status);
+      appendRichStatusText(container, status, true);
     } else {
-      container.textContent = displayText || "转发微博";
+      appendPlainTextWithLinks(container, displayText || "转发微博");
     }
   }
 
@@ -1262,11 +1301,52 @@
     return link;
   }
 
+  function createExternalLinkMedia(status) {
+    const externalLink = getExternalLinkMedia(status);
+    if (!externalLink) {
+      return null;
+    }
+
+    const link = document.createElement("a");
+    link.className = "weibo-grid-reader__article-media";
+    link.href = externalLink.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.addEventListener("click", (event) => event.stopPropagation());
+
+    if (externalLink.cover) {
+      const cover = document.createElement("img");
+      cover.className = "weibo-grid-reader__article-cover";
+      cover.alt = "";
+      cover.loading = "lazy";
+      cover.src = externalLink.cover;
+      cover.addEventListener("error", () => cover.remove(), { once: true });
+      link.append(cover);
+    }
+
+    const content = document.createElement("div");
+    content.className = "weibo-grid-reader__article-content";
+    const label = document.createElement("span");
+    label.textContent = externalLink.label;
+    const title = document.createElement("strong");
+    title.textContent = externalLink.title;
+    content.append(label, title);
+    if (externalLink.description) {
+      const description = document.createElement("p");
+      description.textContent = externalLink.description;
+      content.append(description);
+    }
+
+    link.append(content);
+    return link;
+  }
+
   function createStatusMedia(status) {
     const video = createVideoMedia(status);
     const pictures = createPictureMedia(status);
     const article = createArticleMedia(status);
-    const mediaItems = [video, pictures, article].filter(Boolean);
+    const externalLink = createExternalLinkMedia(status);
+    const mediaItems = [video, pictures, article, externalLink].filter(Boolean);
     if (mediaItems.length < 2) {
       return mediaItems[0] || null;
     }
@@ -1395,15 +1475,50 @@
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__detail-full-image";
     image.alt = alt;
+    let imageReady = false;
+    let fitFrame = 0;
+
+    const updateFitMode = () => {
+      fitFrame = 0;
+      if (!imageReady || !viewer.isConnected || !viewer.clientWidth || !viewer.clientHeight) {
+        return;
+      }
+
+      viewer.classList.remove("weibo-grid-reader__detail-image-viewer--contained");
+      const isLandscape = viewer.classList.contains("weibo-grid-reader__detail-image-viewer--landscape");
+      const viewportSize = isLandscape ? viewer.clientWidth : viewer.clientHeight;
+      const overflowSize = isLandscape
+        ? Math.max(0, viewer.scrollWidth - viewer.clientWidth)
+        : Math.max(0, viewer.scrollHeight - viewer.clientHeight);
+      const fitsNearly = overflowSize <= viewportSize * DETAIL_IMAGE_NEAR_FIT_THRESHOLD;
+
+      viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--contained", fitsNearly);
+      if (fitsNearly) {
+        viewer.scrollLeft = 0;
+        viewer.scrollTop = 0;
+      }
+      repositionActiveDetail();
+    };
+
+    const scheduleFitMode = () => {
+      if (fitFrame) {
+        window.cancelAnimationFrame(fitFrame);
+      }
+      fitFrame = window.requestAnimationFrame(updateFitMode);
+    };
+
     image.addEventListener("load", () => {
       const isPortrait = image.naturalHeight > image.naturalWidth;
       viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--portrait", isPortrait);
       viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--landscape", !isPortrait);
       viewer.scrollLeft = 0;
       viewer.scrollTop = 0;
-      repositionActiveDetail();
+      imageReady = true;
+      scheduleFitMode();
     });
     image.addEventListener("error", () => {
+      imageReady = false;
+      viewer.classList.remove("weibo-grid-reader__detail-image-viewer--contained");
       image.alt = "图片加载失败";
       image.removeAttribute("src");
     }, { once: true });
@@ -1425,13 +1540,19 @@
     }, { passive: false });
     viewer.append(image);
 
+    activeDetailImageFitObserver?.disconnect();
+    activeDetailImageFitObserver = new ResizeObserver(scheduleFitMode);
+    activeDetailImageFitObserver.observe(viewer);
+
     const setImage = (url, nextAlt = alt) => {
       viewer.classList.remove(
         "weibo-grid-reader__detail-image-viewer--portrait",
-        "weibo-grid-reader__detail-image-viewer--landscape"
+        "weibo-grid-reader__detail-image-viewer--landscape",
+        "weibo-grid-reader__detail-image-viewer--contained"
       );
       viewer.scrollLeft = 0;
       viewer.scrollTop = 0;
+      imageReady = false;
       image.alt = nextAlt;
       image.src = url;
     };
@@ -1503,7 +1624,8 @@
     const video = createVideoMedia(status);
     const pictures = createDetailPictures(getPictureUrls(status));
     const article = createArticleMedia(status);
-    const mediaItems = [video, pictures.media, article].filter(Boolean);
+    const externalLink = createExternalLinkMedia(status);
+    const mediaItems = [video, pictures.media, article, externalLink].filter(Boolean);
     if (mediaItems.length < 2) {
       if (video) {
         return { media: video, rail: null, isImage: false };
@@ -1613,6 +1735,8 @@
       return;
     }
 
+    activeDetailImageFitObserver?.disconnect();
+    activeDetailImageFitObserver = null;
     overlay.remove();
     document.documentElement.classList.remove("weibo-grid-reader-detail-open");
     activeDetailStatusId = "";

@@ -565,6 +565,22 @@ html.weibo-grid-reader-detail-open {
   width: auto;
 }
 
+.weibo-grid-reader__detail-image-viewer--contained {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.weibo-grid-reader__detail-image-viewer--contained .weibo-grid-reader__detail-full-image {
+  flex: 0 1 auto;
+  height: auto;
+  max-height: 100%;
+  max-width: 100%;
+  min-width: 0;
+  width: auto;
+}
+
 .weibo-grid-reader__detail-thumbnail-rail {
   align-items: center;
   background: #fafafa;
