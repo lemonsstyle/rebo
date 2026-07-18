@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const CHANNEL = "weibo-grid-reader";
+  const CHANNEL = "weibo-grid-reader-v2";
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
@@ -33,6 +33,10 @@
   let readerMaxId = "";
   let readerGeneration = 0;
   let readerFailedRouteKey = "";
+  let readerRetryTimer = 0;
+  let readerRetryAttempt = 0;
+  let readerSelectionRouteKey = "";
+  let readerSelectionStartedAt = 0;
   let refreshTimer = null;
   let masonryFrame = 0;
   let loadMoreFrame = 0;
@@ -66,9 +70,20 @@
     return window.location.pathname === "/" || window.location.pathname === "/mygroups";
   }
 
+  function getReaderRouteKeyFromUrl(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.origin !== window.location.origin || (url.pathname !== "/" && url.pathname !== "/mygroups")) {
+        return "";
+      }
+      return `${url.pathname}?gid=${url.searchParams.get("gid") || ""}`;
+    } catch {
+      return "";
+    }
+  }
+
   function getReaderRouteKey() {
-    const url = new URL(window.location.href);
-    return `${url.pathname}?gid=${url.searchParams.get("gid") || ""}`;
+    return getReaderRouteKeyFromUrl(window.location.href);
   }
 
   function getExtensionRoot() {
@@ -443,20 +458,84 @@
       scroller.parentElement.insertBefore(surface, scroller);
     }
 
-    surface.hidden = false;
     surface.dataset.columns = String(settings.columnCount);
+    surface.hidden = !readerActive;
+    if (readerActive) {
+      scroller.classList.add("weibo-grid-reader-source-hidden");
+    }
+    mountedScroller = scroller;
+    return true;
+  }
+
+  function activateReaderSurface() {
+    const surface = getReaderSurface();
+    const scroller = findScroller();
+    if (!surface || !scroller) {
+      return false;
+    }
+
+    surface.hidden = false;
     scroller.classList.add("weibo-grid-reader-source-hidden");
     mountedScroller = scroller;
     readerActive = true;
+    updatePageClasses();
     return true;
+  }
+
+  function deactivateReaderSurface() {
+    const surface = getReaderSurface();
+    if (surface) {
+      surface.hidden = true;
+    }
+    mountedScroller?.classList.remove("weibo-grid-reader-source-hidden");
+    findScroller()?.classList.remove("weibo-grid-reader-source-hidden");
+    readerActive = false;
+    updatePageClasses();
+  }
+
+  function cancelReaderRetry(resetAttempt = true) {
+    if (readerRetryTimer) {
+      window.clearTimeout(readerRetryTimer);
+      readerRetryTimer = 0;
+    }
+    if (resetAttempt) {
+      readerRetryAttempt = 0;
+    }
+  }
+
+  function scheduleReaderRetry(routeKey = readerRouteKey) {
+    if (readerRetryTimer || !routeKey) {
+      return;
+    }
+
+    const delay = Math.min(4000, 400 * (2 ** Math.min(readerRetryAttempt, 4)));
+    readerRetryAttempt += 1;
+    readerRetryTimer = window.setTimeout(() => {
+      readerRetryTimer = 0;
+      if (
+        !hasValidExtensionContext()
+        || !settings.readerEnabled
+        || !isFeedRoute()
+        || getReaderRouteKey() !== routeKey
+      ) {
+        return;
+      }
+
+      readerFailedRouteKey = "";
+      if (!mountReaderSurface()) {
+        scheduleReaderRetry(routeKey);
+        return;
+      }
+      readerRouteKey = routeKey;
+      resetReader(true);
+    }, delay);
   }
 
   function unmountReaderSurface() {
     closeDetail(false);
-    mountedScroller?.classList.remove("weibo-grid-reader-source-hidden");
-    findScroller()?.classList.remove("weibo-grid-reader-source-hidden");
+    cancelReaderRetry();
+    deactivateReaderSurface();
     mountedScroller = null;
-    readerActive = false;
     readerRouteKey = "";
     readerLoading = false;
     readerExhausted = false;
@@ -503,7 +582,6 @@
 
     if (groupId) {
       query.list_id = groupId;
-      query.fid = groupId;
     }
 
     return query;
@@ -2272,6 +2350,12 @@
     return cards.length;
   }
 
+  function restoreNativeFeed() {
+    readerFailedRouteKey = readerRouteKey;
+    deactivateReaderSurface();
+    scheduleReaderRetry();
+  }
+
   async function loadTimeline() {
     if (!hasValidExtensionContext() || readerLoading || readerExhausted || !settings.readerEnabled || !isFeedRoute()) {
       return;
@@ -2283,30 +2367,45 @@
 
     readerLoading = true;
     const generation = readerGeneration;
-    const result = await bridgeRequest("fetch-timeline", { query: getFeedQuery() });
+    const routeKey = readerRouteKey;
+    const requestedAt = readerSelectionRouteKey === routeKey
+      ? readerSelectionStartedAt
+      : Date.now();
+    const result = await bridgeRequest("fetch-timeline", {
+      query: getFeedQuery(),
+      requestedAt
+    });
     readerLoading = false;
 
-    if (!hasValidExtensionContext() || generation !== readerGeneration || !settings.readerEnabled || !isFeedRoute()) {
+    if (
+      !hasValidExtensionContext()
+      || generation !== readerGeneration
+      || !settings.readerEnabled
+      || !isFeedRoute()
+      || routeKey !== readerRouteKey
+      || routeKey !== getReaderRouteKey()
+    ) {
       return;
     }
 
     if (!result.ok) {
       if (readerSeenIds.size === 0) {
-        readerFailedRouteKey = readerRouteKey;
-        const surface = getReaderSurface();
-        if (surface) {
-          surface.hidden = true;
-        }
-        mountedScroller?.classList.remove("weibo-grid-reader-source-hidden");
-        findScroller()?.classList.remove("weibo-grid-reader-source-hidden");
-        readerActive = false;
-        updatePageClasses();
+        restoreNativeFeed();
         return;
       }
       return;
     }
 
     const added = renderStatuses(result.payload.statuses);
+    if (!added && readerSeenIds.size === 0) {
+      restoreNativeFeed();
+      return;
+    }
+    if (!readerActive && !activateReaderSurface()) {
+      restoreNativeFeed();
+      return;
+    }
+    cancelReaderRetry();
     const nextMaxId = String(result.payload.maxId || "");
     readerMaxId = nextMaxId;
     readerExhausted = !nextMaxId || nextMaxId === "0" || result.payload.statuses.length === 0;
@@ -2316,8 +2415,12 @@
     }
   }
 
-  function resetReader() {
+  function resetReader(preserveRetryState = false) {
     readerGeneration += 1;
+    if (!preserveRetryState) {
+      cancelReaderRetry();
+    }
+    deactivateReaderSurface();
     readerLoading = false;
     readerExhausted = false;
     readerMaxId = "";
@@ -2383,10 +2486,12 @@
 
     const routeKey = getReaderRouteKey();
     if (readerFailedRouteKey === routeKey) {
+      scheduleReaderRetry(routeKey);
       return;
     }
 
     if (!mountReaderSurface()) {
+      scheduleReaderRetry(routeKey);
       return;
     }
 
@@ -2641,6 +2746,33 @@
         setDrawerOpen(false);
       }
     }, { capture: true });
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const link = origin?.closest("a[href]");
+      const targetRouteKey = link ? getReaderRouteKeyFromUrl(link.href) : "";
+      if (!targetRouteKey) {
+        return;
+      }
+
+      readerSelectionRouteKey = targetRouteKey;
+      readerSelectionStartedAt = Date.now();
+      if (targetRouteKey !== readerRouteKey) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        if (
+          hasValidExtensionContext()
+          && settings.readerEnabled
+          && bridgeReady
+          && isFeedRoute()
+          && getReaderRouteKey() === targetRouteKey
+          && readerRouteKey === targetRouteKey
+        ) {
+          resetReader();
+        }
+      }, 180);
+    });
     window.setInterval(() => {
       if (window.location.href !== lastUrl) {
         refreshPage();

@@ -51,7 +51,7 @@ English version: [Read in English](#en)
 ### 验证清单
 
 1. 切换“使用新布局”开关并拖动“稀疏 / 适中 / 密集”滑杆，确认卡片墙与原始信息流切换正常。
-2. 下拉至少三屏，确认卡片墙持续加载且没有行高空白。
+2. 下拉至少三屏后，再次点击当前分组，确认卡片墙回到该分组第一页且最新微博仍位于最前；确认持续加载时没有行高空白。
 3. 点击图文、转发、视频和外站预览卡，确认普通链接不会误触发详情；微博图片链接会打开原生查看器，评论图片会直接显示并可在详情内预览。
 4. 打开详情后，在正文、图片和评论区分别滚动，确认只有命中的内部区域滚动，背景页面不滚动；检查纯文字详情没有固定大空白，并确认顶级评论下的嵌套回复仅显示一次。
 5. 打开单图、多图、“视频+图片”和外站视频微博，确认媒体可以正常展示与浏览；分别检查近适配单图不会独立滚动、明显长图或宽图仍可滚动浏览。
@@ -111,7 +111,7 @@ The reader is enabled with three columns by default. Layout and column preferenc
 ### Verification Checklist
 
 1. Toggle the new-layout switch and drag the `Sparse / Balanced / Dense` slider; confirm switching between the card wall and native feed works.
-2. Scroll down at least three screen heights; confirm that more cards load without row-height gaps.
+2. After scrolling at least three screen heights, select the current group again; confirm the card wall returns to that group's first page with the newest posts first, then confirm continued loading has no row-height gaps.
 3. Open image, repost, video, and external-preview cards; ordinary links should not accidentally open the detail card, while Weibo image links should open the native viewer and comment images render inline and can preview in-card.
 4. With a detail card open, scroll over the post body, images, and comments separately; only the pointed detail region should scroll, never the background feed. Check that a text-only detail does not have a fixed blank area and that nested replies appear only once.
 5. Check single-image, multi-image, combined video-plus-image, and external-video posts for correct media display and browsing; near-fitting images should not gain a separate scroll range, while clearly oversized images should remain scrollable.
