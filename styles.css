@@ -523,22 +523,21 @@ html.weibo-grid-reader-detail-open {
 
 .weibo-grid-reader__detail-image-viewer {
   scrollbar-color: transparent transparent;
-  scrollbar-width: none;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .weibo-grid-reader__detail-image-viewer:hover {
   scrollbar-color: rgb(255 130 0 / 62%) transparent;
-  scrollbar-width: thin;
 }
 
 .weibo-grid-reader__detail-image-viewer::-webkit-scrollbar {
-  height: 0;
-  width: 0;
-}
-
-.weibo-grid-reader__detail-image-viewer:hover::-webkit-scrollbar {
   height: 5px;
   width: 5px;
+}
+
+.weibo-grid-reader__detail-image-viewer::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .weibo-grid-reader__detail-image-viewer::-webkit-scrollbar-thumb {
@@ -767,11 +766,25 @@ html.weibo-grid-reader-detail-open {
   min-width: 0;
 }
 
-.weibo-grid-reader__comment strong {
+.weibo-grid-reader__comment-name {
   color: #b45100;
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.01em;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.weibo-grid-reader__comment-name[href]:hover {
+  color: #e17412;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__comment-profile {
+  align-self: start;
+  display: block;
+  flex: 0 0 auto;
+  line-height: 0;
 }
 
 .weibo-grid-reader__comment p {
@@ -826,12 +839,9 @@ html.weibo-grid-reader-detail-open {
   object-fit: contain;
 }
 
-.weibo-grid-reader__comment-image-preview--loaded .weibo-grid-reader__comment-image-fallback {
-  display: none;
-}
-
-.weibo-grid-reader__comment-image-preview--failed .weibo-grid-reader__comment-image-fallback {
-  display: inline;
+.weibo-grid-reader__comment-image-preview--failed {
+  color: #999;
+  font-size: 12px;
 }
 
 .weibo-grid-reader__comment-image-preview-layer {
@@ -918,13 +928,19 @@ html.weibo-grid-reader-detail-open {
   position: relative;
 }
 
+.weibo-grid-reader__detail-source-profile {
+  height: 28px;
+  left: 14px;
+  position: absolute;
+  width: 28px;
+}
+
 .weibo-grid-reader__detail-source-avatar {
   background: #f2f2f2;
   border-radius: 50%;
+  display: block;
   height: 28px;
-  left: 14px;
   object-fit: cover;
-  position: absolute;
   width: 28px;
 }
 
@@ -934,7 +950,13 @@ html.weibo-grid-reader-detail-open {
   max-width: 82px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.weibo-grid-reader__detail-source-name[href]:hover {
+  color: #d96809;
+  text-decoration: underline;
 }
 
 .weibo-grid-reader__card-header {

@@ -559,6 +559,11 @@
     return "https://weibo.com/";
   }
 
+  function getProfileUrl(user) {
+    const userId = user?.idstr || user?.id;
+    return userId ? `https://weibo.com/u/${encodeURIComponent(userId)}` : "";
+  }
+
   function isLongTextStatus(status) {
     return Boolean(status?.isLongText || status?.is_long_text || status?.longText || status?.long_text);
   }
@@ -796,7 +801,7 @@
 
   function isWeiboImageLink(value) {
     try {
-      const url = new URL(value);
+      const url = new URL(value, window.location.href);
       return url.hostname === "t.cn"
         || isNativeImageLink(value);
     } catch {
@@ -806,7 +811,7 @@
 
   function isNativeImageLink(value) {
     try {
-      const url = new URL(value);
+      const url = new URL(value, window.location.href);
       return /(^|\.)sinaimg\.cn$/i.test(url.hostname)
         && /\.(?:avif|gif|jpe?g|png|webp)$/i.test(url.pathname);
     } catch {
@@ -816,10 +821,117 @@
 
   function normalizeCommentImageUrl(value) {
     const url = new URL(value, window.location.href);
-    if (url.hostname === "t.cn") {
-      url.protocol = "https:";
-    }
+    url.protocol = "https:";
     return url.href;
+  }
+
+  function addCommentImageUrl(urls, value) {
+    const normalized = getSafeLinkHref(value);
+    if (!normalized || urls.includes(normalized)) {
+      return;
+    }
+    urls.push(normalized);
+  }
+
+  function collectCommentImageUrls(value, urls, depth = 0) {
+    if (depth > 5 || value === null || value === undefined) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      if (isNativeImageLink(value)) {
+        addCommentImageUrl(urls, value);
+      }
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectCommentImageUrls(item, urls, depth + 1));
+      return;
+    }
+
+    if (typeof value === "object") {
+      Object.values(value).forEach((item) => collectCommentImageUrls(item, urls, depth + 1));
+    }
+  }
+
+  function metadataReferencesCommentImageLink(metadata, linkUrl, propertyName = "") {
+    const comparableLinkUrl = getComparableImageUrl(linkUrl);
+    if (!comparableLinkUrl) {
+      return false;
+    }
+
+    if (getComparableImageUrl(propertyName) === comparableLinkUrl) {
+      return true;
+    }
+
+    return Object.values(metadata).some((value) => (
+      typeof value === "string" && getComparableImageUrl(value) === comparableLinkUrl
+    ));
+  }
+
+  function collectLinkedCommentImageUrls(value, linkUrl, urls, depth = 0, propertyName = "") {
+    if (depth > 5 || !value) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectLinkedCommentImageUrls(item, linkUrl, urls, depth + 1));
+      return;
+    }
+
+    if (typeof value !== "object") {
+      return;
+    }
+
+    if (metadataReferencesCommentImageLink(value, linkUrl, propertyName)) {
+      collectCommentImageUrls(value, urls);
+      return;
+    }
+
+    Object.entries(value).forEach(([key, item]) => {
+      collectLinkedCommentImageUrls(item, linkUrl, urls, depth + 1, key);
+    });
+  }
+
+  function getCommentImageVariants(value) {
+    const normalized = normalizeCommentImageUrl(value);
+    if (!isNativeImageLink(normalized)) {
+      return [normalized];
+    }
+
+    const url = new URL(normalized);
+    const match = url.pathname.match(/^\/(?:large|mw\d+|orj360|bmiddle|thumbnail|thumb\d+)\/(.+)$/i);
+    if (!match) {
+      return [url.href];
+    }
+
+    const variants = [];
+    for (const size of [url.pathname.split("/")[1], "orj360", "mw1024", "mw690", "thumbnail"]) {
+      const candidate = new URL(url.href);
+      candidate.pathname = `/${size}/${match[1]}`;
+      if (!variants.includes(candidate.href)) {
+        variants.push(candidate.href);
+      }
+    }
+    return variants;
+  }
+
+  function getCommentImageSources(comment, value) {
+    const directUrls = [];
+    collectLinkedCommentImageUrls(comment?.url_struct, value, directUrls);
+    collectLinkedCommentImageUrls(comment?.url_objects, value, directUrls);
+    if (!directUrls.length) {
+      collectCommentImageUrls(comment?.url_struct, directUrls);
+      collectCommentImageUrls(comment?.url_objects, directUrls);
+    }
+
+    const sources = [];
+    for (const directUrl of directUrls) {
+      getCommentImageVariants(directUrl).forEach((variant) => addCommentImageUrl(sources, variant));
+    }
+    getCommentImageVariants(value).forEach((variant) => addCommentImageUrl(sources, variant));
+    return sources;
   }
 
   function getNativeImageViewerUrl() {
@@ -909,10 +1021,9 @@
     getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer")?.remove();
   }
 
-  function openCommentImagePreview(url) {
+  function openCommentImagePreview(imageSources) {
     const dialog = getDetailOverlay()?.querySelector(".weibo-grid-reader__detail-dialog");
     if (!dialog) {
-      window.open(url, "_blank", "noopener");
       return;
     }
 
@@ -930,7 +1041,19 @@
     image.className = "weibo-grid-reader__comment-image-preview-full";
     image.alt = "评论图片";
     image.referrerPolicy = "unsafe-url";
-    image.src = normalizeCommentImageUrl(url);
+    let sourceIndex = 0;
+    const loadSource = () => {
+      image.src = imageSources[sourceIndex] || "";
+    };
+    image.addEventListener("error", () => {
+      sourceIndex += 1;
+      if (sourceIndex < imageSources.length) {
+        loadSource();
+        return;
+      }
+      image.replaceWith(document.createTextNode("评论图片暂时无法显示"));
+    });
+    loadSource();
     layer.append(close, image);
     layer.addEventListener("click", (event) => {
       if (event.target === layer) {
@@ -940,38 +1063,42 @@
     dialog.append(layer);
   }
 
-  function createCommentImagePreview(url) {
+  function createCommentImagePreview(url, comment) {
     const preview = document.createElement("span");
     preview.className = "weibo-grid-reader__comment-image-preview";
     const button = document.createElement("button");
     button.type = "button";
     button.className = "weibo-grid-reader__comment-image-thumbnail";
     button.setAttribute("aria-label", "预览评论图片");
-    button.addEventListener("click", () => openCommentImagePreview(url));
+    const imageSources = getCommentImageSources(comment, url);
+    let sourceIndex = 0;
+    button.addEventListener("click", () => openCommentImagePreview(imageSources.slice(sourceIndex)));
     const image = document.createElement("img");
     image.alt = "评论图片";
     image.loading = "lazy";
     image.referrerPolicy = "unsafe-url";
-    image.src = normalizeCommentImageUrl(url);
-    image.addEventListener("load", () => preview.classList.add("weibo-grid-reader__comment-image-preview--loaded"), { once: true });
+    image.decoding = "async";
+    const loadSource = () => {
+      image.src = imageSources[sourceIndex] || "";
+    };
+    image.addEventListener("load", () => preview.classList.add("weibo-grid-reader__comment-image-preview--loaded"));
     image.addEventListener("error", () => {
+      sourceIndex += 1;
+      if (sourceIndex < imageSources.length) {
+        loadSource();
+        return;
+      }
       button.remove();
       preview.classList.add("weibo-grid-reader__comment-image-preview--failed");
-    }, { once: true });
-    button.append(image);
-    const fallback = createRichLink(getNativeImageViewerUrl(), "在微博中查看图片", true);
-    fallback.classList.add("weibo-grid-reader__comment-image-fallback");
-    fallback.target = "_self";
-    fallback.addEventListener("click", (event) => {
-      event.preventDefault();
-      closeDetail(false);
-      window.location.assign(fallback.href);
+      preview.textContent = "评论图片暂时无法显示";
     });
-    preview.append(button, fallback);
+    button.append(image);
+    preview.append(button);
+    loadSource();
     return preview;
   }
 
-  function appendPlainTextWithLinks(container, value, renderCommentImages = false) {
+  function appendPlainTextWithLinks(container, value, renderCommentImages = false, comment = null) {
     const source = String(value || "");
     const urlPattern = /https?:\/\/[^\s<]+/g;
     let previousEnd = 0;
@@ -981,7 +1108,7 @@
       container.append(source.slice(previousEnd, matchIndex));
       const url = getSafeLinkHref(match[0]);
       if (url && renderCommentImages && isWeiboImageLink(url)) {
-        container.append(createCommentImagePreview(url));
+        container.append(createCommentImagePreview(url, comment));
       } else {
         container.append(url ? createRichLink(url, match[0]) : match[0]);
       }
@@ -991,7 +1118,7 @@
     container.append(source.slice(previousEnd));
   }
 
-  function appendRichStatusText(container, status, linkifyText = false, renderCommentImages = false) {
+  function appendRichStatusText(container, status, linkifyText = false, renderCommentImages = false, comment = null) {
     const template = document.createElement("template");
     const source = status.text || status.text_raw || "";
     const hideVideoLink = Boolean(getVideoMedia(status));
@@ -1002,7 +1129,7 @@
         if (node.nodeType === Node.TEXT_NODE) {
           const text = hideVideoLink ? node.textContent.replace(/https?:\/\/\S+/g, "") : node.textContent;
           if (linkifyText) {
-            appendPlainTextWithLinks(target, text, renderCommentImages);
+            appendPlainTextWithLinks(target, text, renderCommentImages, comment);
           } else {
             target.append(text);
           }
@@ -1036,7 +1163,7 @@
           const href = getSafeLinkHref(node.getAttribute("href") || "");
           if (href) {
             if (renderCommentImages && isWeiboImageLink(href)) {
-              target.append(createCommentImagePreview(href));
+              target.append(createCommentImagePreview(href, comment));
               continue;
             }
             const link = createRichLink(href);
@@ -1057,7 +1184,7 @@
     appendRichStatusText(container, {
       text: comment.text || comment.text_raw || "",
       page_info: null
-    }, true, true);
+    }, true, true, comment);
   }
 
   function populateStatusText(container, status) {
@@ -1760,15 +1887,32 @@
       item.classList.add("weibo-grid-reader__comment--reply");
     }
 
+    const profileUrl = getProfileUrl(comment.user);
+    const avatarLink = profileUrl ? document.createElement("a") : document.createElement("span");
+    avatarLink.className = "weibo-grid-reader__comment-profile";
+    if (profileUrl) {
+      avatarLink.href = profileUrl;
+      avatarLink.target = "_blank";
+      avatarLink.rel = "noopener noreferrer";
+      avatarLink.setAttribute("aria-label", `打开 ${comment.user?.screen_name || "微博用户"} 的主页`);
+    }
+
     const avatar = document.createElement("img");
     avatar.className = "weibo-grid-reader__comment-avatar";
     avatar.alt = "";
     avatar.src = comment.user?.avatar_hd || comment.user?.profile_image_url || "";
-    avatar.addEventListener("error", () => avatar.remove(), { once: true });
+    avatar.addEventListener("error", () => avatarLink.remove(), { once: true });
+    avatarLink.append(avatar);
 
     const content = document.createElement("div");
-    const name = document.createElement("strong");
+    const name = profileUrl ? document.createElement("a") : document.createElement("strong");
+    name.className = "weibo-grid-reader__comment-name";
     name.textContent = comment.user?.screen_name || "微博用户";
+    if (profileUrl) {
+      name.href = profileUrl;
+      name.target = "_blank";
+      name.rel = "noopener noreferrer";
+    }
     const reply = getCommentReply(comment, commentsById);
     const commentAuthorId = String(comment.user?.idstr || comment.user?.id || "");
     const isPostAuthorReply = Boolean(
@@ -1783,7 +1927,7 @@
     if (hasRichStatusText(comment)) {
       appendRichCommentText(text, comment);
     } else {
-      appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true);
+      appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true, comment);
     }
     if (!isPostAuthorReply) {
       content.append(name);
@@ -1803,7 +1947,7 @@
       }
     }
 
-    item.append(avatar, content);
+    item.append(avatarLink, content);
     return item;
   }
 
@@ -2039,18 +2183,33 @@
     original.className = "weibo-grid-reader__detail-original";
     original.href = getStatusUrl(status);
     original.textContent = "原文";
+    const sourceProfileUrl = getProfileUrl(status.user);
+    const sourceProfile = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
+    sourceProfile.className = "weibo-grid-reader__detail-source-profile";
+    if (sourceProfileUrl) {
+      sourceProfile.href = sourceProfileUrl;
+      sourceProfile.target = "_blank";
+      sourceProfile.rel = "noopener noreferrer";
+      sourceProfile.setAttribute("aria-label", `打开 ${status.user?.screen_name || "微博用户"} 的主页`);
+    }
     const sourceAvatar = document.createElement("img");
     sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
     sourceAvatar.alt = "";
     sourceAvatar.src = status.user?.avatar_hd || status.user?.avatar_large || status.user?.profile_image_url || "";
-    sourceAvatar.addEventListener("error", () => sourceAvatar.remove(), { once: true });
-    const sourceName = document.createElement("span");
+    sourceAvatar.addEventListener("error", () => sourceProfile.remove(), { once: true });
+    sourceProfile.append(sourceAvatar);
+    const sourceName = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
     sourceName.className = "weibo-grid-reader__detail-source-name";
     sourceName.textContent = status.user?.screen_name || "微博用户";
     sourceName.title = sourceName.textContent;
+    if (sourceProfileUrl) {
+      sourceName.href = sourceProfileUrl;
+      sourceName.target = "_blank";
+      sourceName.rel = "noopener noreferrer";
+    }
     const sourceActions = document.createElement("div");
     sourceActions.className = "weibo-grid-reader__detail-source-actions";
-    sourceActions.append(sourceAvatar, original, sourceName);
+    sourceActions.append(sourceProfile, original, sourceName);
     side.append(sideContent, sourceActions);
 
     if (detailMedia.rail) {

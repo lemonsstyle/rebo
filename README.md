@@ -18,6 +18,7 @@ English version: [Read in English](#en)
 - 纯文字详情按正文实际高度放置评论，避免固定空白；评论栏加宽，并与底部博主资料栏以背景和分隔线区分。
 - 评论区会显示微博响应中的嵌套回复，并按评论 ID 去重；博主回复其他评论时隐藏重复的博主名。
 - 嵌套回复不重复引用父评论，使用缩进和留白表达层级；同一父评论下的回复不再使用分隔线。
+- 评论者头像和昵称、详情底部博主头像和昵称均可在新标签页打开对应微博主页。
 
 ### fatigue 更新
 
@@ -25,7 +26,7 @@ English version: [Read in English](#en)
 - 打开详情后，滚轮只会滚动命中的详情内部区域：左侧正文、图片、缩略图列或右侧评论列表；背景信息流保持不动，关闭详情后恢复正常页面滚动。
 - 详情卡片使用固定高度，右栏评论内容在卡片内部滚动。
 - 同时包含视频和图片的微博会同时展示两类媒体；视频无法播放时，图片仍可显示。
-- 微博正文和转发中的 `t.cn` 短链会作为普通外链打开；带标题或封面的外站网页、视频会显示可点击预览卡。已识别的新浪图床正文链接仍交给微博原生查看器，评论图片预览失败时也会回退到该查看器。
+- 微博正文和转发中的 `t.cn` 短链会作为普通外链打开；带标题或封面的外站网页、视频会显示可点击预览卡。已识别的新浪图床正文链接仍交给微博原生查看器；评论图片则直接显示在评论区，点击后在详情卡片内预览。
 - 详情图片只有在实际溢出超过可视区域约 `12%` 时才启用独立滚动；接近完整显示时会自动缩放以避免无意义的短距离滚动。
 
 ### 功能
@@ -51,7 +52,7 @@ English version: [Read in English](#en)
 
 1. 切换“使用新布局”开关并拖动“稀疏 / 适中 / 密集”滑杆，确认卡片墙与原始信息流切换正常。
 2. 下拉至少三屏，确认卡片墙持续加载且没有行高空白。
-3. 点击图文、转发、视频和外站预览卡，确认普通链接不会误触发详情；微博图片链接会打开原生查看器，评论图片可在详情内预览并在失败时回退到原生查看器。
+3. 点击图文、转发、视频和外站预览卡，确认普通链接不会误触发详情；微博图片链接会打开原生查看器，评论图片会直接显示并可在详情内预览。
 4. 打开详情后，在正文、图片和评论区分别滚动，确认只有命中的内部区域滚动，背景页面不滚动；检查纯文字详情没有固定大空白，并确认顶级评论下的嵌套回复仅显示一次。
 5. 打开单图、多图、“视频+图片”和外站视频微博，确认媒体可以正常展示与浏览；分别检查近适配单图不会独立滚动、明显长图或宽图仍可滚动浏览。
 
@@ -77,6 +78,7 @@ For the detailed architecture, APIs, scrolling rules, privacy trade-offs, and ma
 - Text-only details size the post row from its actual content instead of leaving a fixed blank area; the comments sidebar is wider and visually separated from the author footer.
 - The comments area renders nested replies from Weibo's response and deduplicates them by comment ID. The author's name is hidden when replying to another comment.
 - Nested replies use indentation and spacing rather than repeating the parent text; replies under the same parent no longer use divider lines.
+- Commenter avatars and names, plus the author avatar and name in the detail footer, open the corresponding Weibo profile in a new tab.
 
 ### What Changed in fatigue
 
@@ -84,7 +86,7 @@ For the detailed architecture, APIs, scrolling rules, privacy trade-offs, and ma
 - While a detail card is open, wheel input is routed only to the detail area beneath the pointer: the post body, image viewer, thumbnail rail, or comments list. The background feed remains fixed until the detail card closes.
 - Detail cards have a fixed height, and long comments scroll inside the sidebar.
 - Posts that contain both video and pictures now render both media types. Pictures remain available if video playback fails.
-- `t.cn` links in post and repost text open as ordinary external links. External webpages and videos with returned preview metadata render as clickable cards. Recognized Sina image-host links still use Weibo's native viewer, and failed comment-image previews use that fallback.
+- `t.cn` links in post and repost text open as ordinary external links. External webpages and videos with returned preview metadata render as clickable cards. Recognized Sina image-host links still use Weibo's native viewer; comment images render inline and open in the detail card when selected.
 - Detail images receive their own scroll behavior only when actual overflow exceeds roughly `12%` of the viewport. Near-fitting images scale down to avoid a pointless short scroll.
 
 ### Features
@@ -110,7 +112,7 @@ The reader is enabled with three columns by default. Layout and column preferenc
 
 1. Toggle the new-layout switch and drag the `Sparse / Balanced / Dense` slider; confirm switching between the card wall and native feed works.
 2. Scroll down at least three screen heights; confirm that more cards load without row-height gaps.
-3. Open image, repost, video, and external-preview cards; ordinary links should not accidentally open the detail card, while Weibo image links should open the native viewer and comment images can preview in-card first.
+3. Open image, repost, video, and external-preview cards; ordinary links should not accidentally open the detail card, while Weibo image links should open the native viewer and comment images render inline and can preview in-card.
 4. With a detail card open, scroll over the post body, images, and comments separately; only the pointed detail region should scroll, never the background feed. Check that a text-only detail does not have a fixed blank area and that nested replies appear only once.
 5. Check single-image, multi-image, combined video-plus-image, and external-video posts for correct media display and browsing; near-fitting images should not gain a separate scroll range, while clearly oversized images should remain scrollable.
 
