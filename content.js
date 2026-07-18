@@ -11,9 +11,9 @@
     columnCount: 3
   });
   const DENSITY_OPTIONS = Object.freeze({
-    3: { label: "稀疏", description: "卡片更宽 · 3 列" },
-    4: { label: "适中", description: "平衡阅读 · 4 列" },
-    5: { label: "密集", description: "显示更多 · 5 列" }
+    3: { label: "稀疏" },
+    4: { label: "适中" },
+    5: { label: "密集" }
   });
   const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
 
@@ -23,6 +23,7 @@
   let currentFeedShell = null;
   let currentNavigationPanel = null;
   let currentPageLayout = null;
+  let currentComposerPanel = null;
   let currentUtilityPanel = null;
   let mountedScroller = null;
   let readerRouteKey = "";
@@ -94,7 +95,6 @@
       panel: root.querySelector("[data-reader-panel]"),
       readerToggle: root.querySelector("[data-reader-toggle]"),
       densitySlider: root.querySelector("[data-density-slider]"),
-      densityDescription: root.querySelector("[data-density-description]"),
       densityLabels: [...root.querySelectorAll("[data-density-label]")]
     };
   }
@@ -104,7 +104,7 @@
   }
 
   function updateControlState() {
-    const { root, button, panel, readerToggle, densitySlider, densityDescription, densityLabels } = getControls();
+    const { root, button, panel, readerToggle, densitySlider, densityLabels } = getControls();
     const available = isFeedRoute();
 
     if (!root) {
@@ -124,14 +124,11 @@
     if (densitySlider) {
       densitySlider.value = String(settings.columnCount);
       densitySlider.disabled = !settings.readerEnabled;
-      densitySlider.setAttribute("aria-valuetext", `${density.label}，${density.description}`);
+      densitySlider.setAttribute("aria-valuetext", density.label);
       densitySlider.style.setProperty(
         "--weibo-grid-reader-density-progress",
         `${((settings.columnCount - 3) / 2) * 100}%`
       );
-    }
-    if (densityDescription) {
-      densityDescription.textContent = density.description;
     }
     for (const label of densityLabels || []) {
       const isSelected = Number(label.dataset.densityLabel) === settings.columnCount;
@@ -173,10 +170,23 @@
     return null;
   }
 
+  function findComposerPanel() {
+    const panels = [...document.querySelectorAll(".woo-panel-main")];
+    const composerPanels = panels.filter((panel) => {
+      const text = panel.innerText || "";
+      const hasComposerHint = /有什么新鲜事想分享给大家|分享新鲜事/.test(text);
+      const hasEditor = Boolean(panel.querySelector('textarea, [contenteditable="true"], [role="textbox"]'));
+      return (hasComposerHint || hasEditor) && text.includes("发送");
+    });
+
+    return composerPanels.sort((first, second) => first.innerText.length - second.innerText.length)[0] || null;
+  }
+
   function updatePageAnchors() {
     const nextFeedShell = findFeedShell();
     const nextNavigationPanel = findNavigationPanel();
     const nextPageLayout = findPageLayout(nextFeedShell, nextNavigationPanel);
+    const nextComposerPanel = findComposerPanel();
 
     if (currentFeedShell && currentFeedShell !== nextFeedShell) {
       currentFeedShell.classList.remove("weibo-grid-reader-feed-shell");
@@ -190,12 +200,18 @@
       currentPageLayout.classList.remove("weibo-grid-reader-page-layout");
     }
 
+    if (currentComposerPanel && currentComposerPanel !== nextComposerPanel) {
+      currentComposerPanel.classList.remove("weibo-grid-reader-composer-panel");
+    }
+
     currentFeedShell = nextFeedShell;
     currentNavigationPanel = nextNavigationPanel;
     currentPageLayout = nextPageLayout;
+    currentComposerPanel = nextComposerPanel;
     currentFeedShell?.classList.add("weibo-grid-reader-feed-shell");
     currentNavigationPanel?.classList.add("weibo-grid-reader-navigation-panel");
     currentPageLayout?.classList.add("weibo-grid-reader-page-layout");
+    currentComposerPanel?.classList.add("weibo-grid-reader-composer-panel");
   }
 
   function hideUtilityFooter() {
@@ -1681,9 +1697,68 @@
     }
   }
 
-  function createCommentItem(comment) {
+  function getCommentId(comment) {
+    return String(comment.idstr || comment.id || comment.mid || "");
+  }
+
+  function getCommentReplies(comment) {
+    const replies = comment.comments || comment.replies || comment.children || [];
+    return Array.isArray(replies) ? replies : [];
+  }
+
+  function indexComments(comments, commentsById = new Map()) {
+    for (const comment of comments) {
+      const commentId = getCommentId(comment);
+      if (commentId) {
+        commentsById.set(commentId, comment);
+      }
+      indexComments(getCommentReplies(comment), commentsById);
+    }
+    return commentsById;
+  }
+
+  function getCommentReply(comment, commentsById) {
+    const nestedReply = comment.reply_comment
+      || comment.replyComment
+      || comment.reply_comment_info
+      || comment.replyCommentInfo
+      || comment.reply;
+    const inlineReply = nestedReply && typeof nestedReply === "object" ? nestedReply : {};
+    const replyId = inlineReply.idstr
+      || inlineReply.id
+      || comment.reply_comment_id
+      || comment.replyCommentId
+      || (typeof nestedReply === "string" || typeof nestedReply === "number" ? nestedReply : "");
+    const indexedReply = replyId ? commentsById?.get(String(replyId)) : null;
+    const reply = { ...(indexedReply || {}), ...inlineReply };
+    const user = reply.user || comment.reply_user || comment.replyUser || null;
+    const text = reply.text || reply.text_raw || comment.reply_original_text || comment.replyOriginalText || "";
+    if (!user && !text) {
+      return null;
+    }
+
+    return {
+      ...reply,
+      text,
+      text_raw: reply.text_raw || comment.reply_original_text || comment.replyOriginalText || "",
+      user
+    };
+  }
+
+  function createCommentItem(comment, commentsById, renderedCommentIds, postAuthorId, depth = 0) {
+    const commentId = getCommentId(comment);
+    if (commentId && renderedCommentIds.has(commentId)) {
+      return null;
+    }
+    if (commentId) {
+      renderedCommentIds.add(commentId);
+    }
+
     const item = document.createElement("article");
     item.className = "weibo-grid-reader__comment";
+    if (depth) {
+      item.classList.add("weibo-grid-reader__comment--reply");
+    }
 
     const avatar = document.createElement("img");
     avatar.className = "weibo-grid-reader__comment-avatar";
@@ -1694,13 +1769,39 @@
     const content = document.createElement("div");
     const name = document.createElement("strong");
     name.textContent = comment.user?.screen_name || "微博用户";
+    const reply = getCommentReply(comment, commentsById);
+    const commentAuthorId = String(comment.user?.idstr || comment.user?.id || "");
+    const isPostAuthorReply = Boolean(
+      postAuthorId
+      && commentAuthorId === postAuthorId
+      && (depth > 0 || reply)
+    );
+    if (isPostAuthorReply) {
+      item.classList.add("weibo-grid-reader__comment--author-reply");
+    }
     const text = document.createElement("p");
     if (hasRichStatusText(comment)) {
       appendRichCommentText(text, comment);
     } else {
       appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true);
     }
-    content.append(name, text);
+    if (!isPostAuthorReply) {
+      content.append(name);
+    }
+    content.append(text);
+
+    const replies = getCommentReplies(comment);
+    if (replies.length && depth < 2) {
+      const replyList = document.createElement("div");
+      replyList.className = "weibo-grid-reader__comment-replies";
+      const replyItems = replies
+        .map((reply) => createCommentItem(reply, commentsById, renderedCommentIds, postAuthorId, depth + 1))
+        .filter(Boolean);
+      if (replyItems.length) {
+        replyList.append(...replyItems);
+        content.append(replyList);
+      }
+    }
 
     item.append(avatar, content);
     return item;
@@ -1725,7 +1826,13 @@
       return;
     }
 
-    comments.append(...result.payload.comments.map(createCommentItem));
+    const commentsById = indexComments(result.payload.comments);
+    const renderedCommentIds = new Set();
+    const postAuthorId = String(status.user?.idstr || status.user?.id || "");
+    const commentItems = result.payload.comments
+      .map((comment) => createCommentItem(comment, commentsById, renderedCommentIds, postAuthorId))
+      .filter(Boolean);
+    comments.append(...commentItems);
     repositionActiveDetail();
   }
 
@@ -1931,15 +2038,19 @@
     const original = document.createElement("a");
     original.className = "weibo-grid-reader__detail-original";
     original.href = getStatusUrl(status);
-    original.textContent = "在微博中打开";
+    original.textContent = "原文";
     const sourceAvatar = document.createElement("img");
     sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
     sourceAvatar.alt = "";
     sourceAvatar.src = status.user?.avatar_hd || status.user?.avatar_large || status.user?.profile_image_url || "";
     sourceAvatar.addEventListener("error", () => sourceAvatar.remove(), { once: true });
+    const sourceName = document.createElement("span");
+    sourceName.className = "weibo-grid-reader__detail-source-name";
+    sourceName.textContent = status.user?.screen_name || "微博用户";
+    sourceName.title = sourceName.textContent;
     const sourceActions = document.createElement("div");
     sourceActions.className = "weibo-grid-reader__detail-source-actions";
-    sourceActions.append(sourceAvatar, original);
+    sourceActions.append(sourceAvatar, original, sourceName);
     side.append(sideContent, sourceActions);
 
     if (detailMedia.rail) {
@@ -2172,7 +2283,6 @@
           <label class="weibo-grid-reader__setting">
             <span class="weibo-grid-reader__setting-copy">
               <strong>使用新布局</strong>
-              <small>独立多列卡片墙</small>
             </span>
             <span class="weibo-grid-reader__switch">
               <input type="checkbox" data-reader-toggle>
@@ -2182,7 +2292,6 @@
           <div class="weibo-grid-reader__setting weibo-grid-reader__column-setting">
             <span class="weibo-grid-reader__setting-copy">
               <strong>信息密度</strong>
-              <small data-density-description>卡片更宽 · 3 列</small>
             </span>
             <div class="weibo-grid-reader__density-control">
               <input class="weibo-grid-reader__density-slider" type="range" min="3" max="5" step="1" value="3" data-density-slider aria-label="选择信息密度">
@@ -2367,6 +2476,12 @@
         setDrawerOpen(false);
       }
     });
+    window.addEventListener("pointerdown", (event) => {
+      const root = getExtensionRoot();
+      if (drawerOpen && root && event.target instanceof Node && !root.contains(event.target)) {
+        setDrawerOpen(false);
+      }
+    }, { capture: true });
     window.setInterval(() => {
       if (window.location.href !== lastUrl) {
         refreshPage();
