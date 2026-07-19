@@ -29,15 +29,78 @@
   function createWeiboRequestHeaders() {
     const headers = {
       Accept: "application/json, text/plain, */*",
-      "Client-Version": "3.0.0",
+      "Client-Version": window.$VERSION?.CLIENT || "3.0.0",
       "X-Requested-With": "XMLHttpRequest"
     };
+    if (window.$VERSION?.SERVER) {
+      headers["Server-Version"] = window.$VERSION.SERVER;
+    }
     const xsrfToken = readCookie("XSRF-TOKEN");
     if (xsrfToken) {
       headers["X-XSRF-TOKEN"] = xsrfToken;
     }
 
     return headers;
+  }
+
+  function createWeiboFormRequestHeaders() {
+    return {
+      ...createWeiboRequestHeaders(),
+      "Content-Type": "application/x-www-form-urlencoded"
+    };
+  }
+
+  async function getBotFingerprint(source) {
+    try {
+      const result = await window.wbBotDetector?.get?.({ useCache: false, from: source });
+      return result?.rid ? { fp: result.rid } : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function postWeiboForm(path, fields, botDetectorSource) {
+    const endpoint = new URL(path, window.location.origin);
+    const form = new URLSearchParams();
+    const fingerprint = await getBotFingerprint(botDetectorSource);
+
+    for (const [name, value] of Object.entries({ ...fields, ...fingerprint })) {
+      if (value !== undefined && value !== null && value !== "") {
+        form.set(name, String(value));
+      }
+    }
+
+    try {
+      const response = await window.fetch(endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: createWeiboFormRequestHeaders(),
+        body: form.toString()
+      });
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        // 保留 HTTP 状态信息，供调用方显示更明确的失败提示。
+      }
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          reason: payload?.msg || payload?.message || `微博操作失败（HTTP ${response.status}）。`
+        };
+      }
+      if (!payload || Number(payload.ok) <= 0) {
+        return { ok: false, reason: payload?.msg || payload?.message || "微博没有确认此次操作。" };
+      }
+
+      return { ok: true, payload: { data: payload.data || null } };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof Error ? error.message : "微博操作请求失败。"
+      };
+    }
   }
 
   function getTimelineGroupId(endpoint) {
@@ -401,6 +464,60 @@
     }
   }
 
+  async function createComment(statusId, text) {
+    const comment = String(text || "").trim();
+    if (!statusId || !comment) {
+      return { ok: false, reason: "评论内容不能为空。" };
+    }
+
+    return postWeiboForm(
+      "/ajax/comments/create",
+      {
+        id: String(statusId),
+        comment,
+        is_repost: 0,
+        comment_ori: 0,
+        is_comment: 0
+      },
+      "weibo-comment"
+    );
+  }
+
+  async function createRepost(statusId, text) {
+    if (!statusId) {
+      return { ok: false, reason: "缺少微博 ID，无法转发。" };
+    }
+
+    return postWeiboForm(
+      "/ajax/statuses/normal_repost",
+      {
+        id: String(statusId),
+        comment: String(text || "").trim(),
+        is_repost: 0,
+        comment_ori: 0,
+        is_comment: 0,
+        visible: 0
+      },
+      "weibo-comment-repost"
+    );
+  }
+
+  async function setAttitude(statusId) {
+    if (!statusId) {
+      return { ok: false, reason: "缺少微博 ID，无法点赞。" };
+    }
+
+    return postWeiboForm("/ajax/statuses/setLike", { id: String(statusId) }, "weibo-like");
+  }
+
+  async function cancelAttitude(statusId) {
+    if (!statusId) {
+      return { ok: false, reason: "缺少微博 ID，无法取消点赞。" };
+    }
+
+    return postWeiboForm("/ajax/statuses/cancelLike", { id: String(statusId) }, "weibo-like");
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== window.location.origin) {
       return;
@@ -408,6 +525,17 @@
 
     const message = event.data;
     if (message?.channel !== CHANNEL || message.sender !== "content" || !message.requestId) {
+      return;
+    }
+
+    const requiresUserActivation = [
+      "create-comment",
+      "create-repost",
+      "set-attitude",
+      "cancel-attitude"
+    ].includes(message.type);
+    if (requiresUserActivation && navigator.userActivation && !navigator.userActivation.isActive) {
+      respond(message.requestId, { ok: false, reason: "请在详情卡片中手动发起此操作。" });
       return;
     }
 
@@ -425,6 +553,30 @@
 
     if (message.type === "fetch-long-text") {
       void fetchLongText(message.statusId).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "create-comment") {
+      void createComment(message.statusId, message.text).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "create-repost") {
+      void createRepost(message.statusId, message.text).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "set-attitude") {
+      void setAttitude(message.statusId).then((result) => {
+        respond(message.requestId, result);
+      });
+    }
+
+    if (message.type === "cancel-attitude") {
+      void cancelAttitude(message.statusId).then((result) => {
         respond(message.requestId, result);
       });
     }
