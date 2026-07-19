@@ -1426,6 +1426,40 @@ html.weibo-grid-reader-detail-open {
   height: 2px;
 }
 
+.weibo-grid-reader__load-status {
+  align-items: center;
+  color: #8d7f74;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: center;
+  margin: 0;
+  min-height: 42px;
+  padding: 6px 0 16px;
+  text-align: center;
+}
+
+.weibo-grid-reader__load-status[data-state="loading"]::before,
+.weibo-grid-reader__load-status[data-state="retrying"]::before {
+  animation: weibo-grid-reader-loading-spin 720ms linear infinite;
+  border: 2px solid #f2c9a6;
+  border-radius: 50%;
+  border-top-color: #eb7919;
+  content: "";
+  height: 13px;
+  width: 13px;
+}
+
+.weibo-grid-reader__load-status[data-state="error"] {
+  color: #b45100;
+}
+
+@keyframes weibo-grid-reader-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (min-width: 1080px) {
   html.weibo-grid-reader-active .weibo-grid-reader-navigation-panel {
     position: sticky !important;

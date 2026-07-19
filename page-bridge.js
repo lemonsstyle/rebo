@@ -8,8 +8,11 @@
   const observedTimelineEndpointByRoute = new Map();
   let readerTimelineRequestDepth = 0;
 
-  function respond(requestId, payload) {
-    window.postMessage({ channel: CHANNEL, sender: "page", requestId, ...payload }, window.location.origin);
+  function respond(requestId, bridgeSessionId, payload) {
+    window.postMessage(
+      { channel: CHANNEL, sender: "page", requestId, bridgeSessionId, ...payload },
+      window.location.origin
+    );
   }
 
   function readCookie(name) {
@@ -539,45 +542,50 @@
       return;
     }
 
+    const bridgeSessionId = message.bridgeSessionId;
+    if (!bridgeSessionId) {
+      return;
+    }
+
     if (message.type === "fetch-timeline") {
       void fetchTimeline(message.query, message.routeKey, message.requestedAt).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "fetch-comments") {
       void fetchComments(message.statusId).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "fetch-long-text") {
       void fetchLongText(message.statusId).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "create-comment") {
       void createComment(message.statusId, message.text).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "create-repost") {
       void createRepost(message.statusId, message.text).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "set-attitude") {
       void setAttitude(message.statusId).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "cancel-attitude") {
       void cancelAttitude(message.statusId).then((result) => {
-        respond(message.requestId, result);
+        respond(message.requestId, bridgeSessionId, result);
       });
     }
 

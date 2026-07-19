@@ -2,6 +2,7 @@
   "use strict";
 
   const CHANNEL = "weibo-grid-reader-v4";
+  const BRIDGE_SESSION_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
@@ -16,6 +17,8 @@
     5: { label: "密集" }
   });
   const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
+  const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
+  const MAX_AUTOMATIC_LOAD_RETRIES = 3;
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -41,6 +44,9 @@
   let refreshTimer = null;
   let masonryFrame = 0;
   let loadMoreFrame = 0;
+  let loadMoreRetryTimer = 0;
+  let loadMoreRetryAttempt = 0;
+  let readerDuplicatePageCount = 0;
   let readerResizeObserver = null;
   let readerCardResizeObserver = null;
   let observedReaderWidth = 0;
@@ -286,7 +292,14 @@
       });
 
       window.postMessage(
-        { channel: CHANNEL, sender: "content", requestId, type, ...payload },
+        {
+          channel: CHANNEL,
+          sender: "content",
+          requestId,
+          bridgeSessionId: BRIDGE_SESSION_ID,
+          type,
+          ...payload
+        },
         window.location.origin
       );
     });
@@ -304,12 +317,28 @@
     surface.innerHTML = `
       <div class="weibo-grid-reader__grid" data-reader-grid></div>
       <div class="weibo-grid-reader__sentinel" data-reader-sentinel aria-hidden="true"></div>
+      <p class="weibo-grid-reader__load-status" data-reader-load-status role="status" aria-live="polite" hidden></p>
     `;
     return surface;
   }
 
   function getReaderGrid() {
     return getReaderSurface()?.querySelector("[data-reader-grid]") || null;
+  }
+
+  function setReaderLoadStatus(message = "", state = "") {
+    const status = getReaderSurface()?.querySelector("[data-reader-load-status]");
+    if (!status) {
+      return;
+    }
+
+    status.hidden = !message;
+    status.textContent = message;
+    if (state) {
+      status.dataset.state = state;
+    } else {
+      delete status.dataset.state;
+    }
   }
 
   function getMasonryColumnCount() {
@@ -448,6 +477,52 @@
     });
   }
 
+  function cancelLoadMoreRetry(resetAttempt = true) {
+    if (loadMoreRetryTimer) {
+      window.clearTimeout(loadMoreRetryTimer);
+      loadMoreRetryTimer = 0;
+    }
+    if (resetAttempt) {
+      loadMoreRetryAttempt = 0;
+    }
+  }
+
+  function isReaderNearEnd() {
+    const surface = getReaderSurface();
+    return Boolean(
+      surface
+      && !surface.hidden
+      && readerActive
+      && surface.getBoundingClientRect().bottom <= window.innerHeight + 900
+    );
+  }
+
+  function scheduleLoadMoreRetry() {
+    if (loadMoreRetryTimer || readerExhausted || !readerActive || !isReaderNearEnd()) {
+      return;
+    }
+
+    if (loadMoreRetryAttempt >= MAX_AUTOMATIC_LOAD_RETRIES) {
+      setReaderLoadStatus("加载更多微博失败，请继续向下滚动后重试。", "error");
+      return;
+    }
+
+    const delay = Math.min(4000, 500 * (2 ** Math.min(loadMoreRetryAttempt, 3)));
+    loadMoreRetryAttempt += 1;
+    loadMoreRetryTimer = window.setTimeout(() => {
+      loadMoreRetryTimer = 0;
+      if (
+        hasValidExtensionContext()
+        && settings.readerEnabled
+        && isFeedRoute()
+        && !readerExhausted
+        && isReaderNearEnd()
+      ) {
+        void loadTimeline();
+      }
+    }, delay);
+  }
+
   function mountReaderSurface() {
     const scroller = findScroller();
     if (!scroller?.parentElement) {
@@ -480,6 +555,7 @@
     mountedScroller = scroller;
     readerActive = true;
     updatePageClasses();
+    scheduleLoadMore();
     return true;
   }
 
@@ -581,6 +657,8 @@
     masonryFrame = 0;
     window.cancelAnimationFrame(loadMoreFrame);
     loadMoreFrame = 0;
+    cancelLoadMoreRetry();
+    readerDuplicatePageCount = 0;
     sentinelObserver?.disconnect();
     sentinelObserver = null;
     readerResizeObserver?.disconnect();
@@ -597,6 +675,7 @@
       surface.hidden = true;
       getReaderGrid()?.replaceChildren();
       getReaderGrid()?.removeAttribute("data-masonry-height");
+      setReaderLoadStatus();
     }
   }
 
@@ -2698,6 +2777,9 @@
     }
 
     readerLoading = true;
+    if (readerActive && readerSeenIds.size) {
+      setReaderLoadStatus("正在加载更多微博…", "loading");
+    }
     const generation = readerGeneration;
     const routeKey = readerRouteKey;
     const requestedAt = readerSelectionRouteKey === routeKey
@@ -2726,6 +2808,8 @@
         restoreNativeFeed();
         return;
       }
+      setReaderLoadStatus("加载更多微博失败，正在重试…", "retrying");
+      scheduleLoadMoreRetry();
       return;
     }
 
@@ -2739,13 +2823,31 @@
       return;
     }
     cancelReaderRetry();
+    const previousMaxId = readerMaxId;
     const nextMaxId = String(result.payload.maxId || "");
     readerMaxId = nextMaxId;
-    readerExhausted = !nextMaxId || nextMaxId === "0" || result.payload.statuses.length === 0;
+    const hasAdvancedCursor = Boolean(nextMaxId && nextMaxId !== "0" && nextMaxId !== previousMaxId);
+    readerExhausted = !hasAdvancedCursor || result.payload.statuses.length === 0;
 
-    if (!added && !readerExhausted) {
+    if (added) {
+      readerDuplicatePageCount = 0;
+      cancelLoadMoreRetry();
+      setReaderLoadStatus();
+      return;
+    }
+
+    if (!readerExhausted) {
+      readerDuplicatePageCount += 1;
+      if (readerDuplicatePageCount < MAX_CONSECUTIVE_DUPLICATE_PAGES) {
+        setReaderLoadStatus("正在跳过重复微博…", "loading");
+        scheduleLoadMoreRetry();
+        return;
+      }
       readerExhausted = true;
     }
+
+    cancelLoadMoreRetry();
+    setReaderLoadStatus("已加载当前分组的全部微博。", "complete");
   }
 
   function resetReader(preserveRetryState = false) {
@@ -2757,6 +2859,9 @@
     readerLoading = false;
     readerExhausted = false;
     readerMaxId = "";
+    readerDuplicatePageCount = 0;
+    cancelLoadMoreRetry();
+    setReaderLoadStatus();
     readerFailedRouteKey = "";
     readerSeenIds.clear();
     getReaderGrid()?.replaceChildren();
@@ -2806,7 +2911,7 @@
       return;
     }
 
-    if (surface.getBoundingClientRect().bottom <= window.innerHeight + 900) {
+    if (isReaderNearEnd()) {
       void loadTimeline();
     }
   }
@@ -2995,7 +3100,12 @@
       }
 
       const response = event.data;
-      if (response?.channel !== CHANNEL || response.sender !== "page" || !response.requestId) {
+      if (
+        response?.channel !== CHANNEL
+        || response.sender !== "page"
+        || response.bridgeSessionId !== BRIDGE_SESSION_ID
+        || !response.requestId
+      ) {
         return;
       }
 
@@ -3064,6 +3174,7 @@
       refreshPage();
       repositionActiveDetail();
     }, { passive: true });
+    window.addEventListener("scroll", scheduleLoadMore, { passive: true });
     window.addEventListener("popstate", () => {
       if (activeDetailStatusId) {
         closeDetail(false);
