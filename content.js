@@ -19,9 +19,11 @@
   const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
-  // 评论行左中右三个悬停区需要鼠标停留超过 1 秒才亮起，避免鼠标只是划过评论
-  // 列表时到处闪烁。
-  const COMMENT_ZONE_HOVER_REVEAL_MS = 1000;
+  // 评论行的转发/评论/点赞图标簇固定挂在该评论自己的头部一行（与昵称同一行，
+  // 靠右对齐），鼠标悬停这条评论行的任意位置后短暂延迟才提亮为完全可交互，
+  // 延迟只用于防止鼠标划过列表时图标到处闪烁，因此取一个几乎无感知的短值，
+  // 而不是像早期版本那样用 1 秒等待去"验证用户是否真的想操作"。
+  const COMMENT_ACTIONS_REVEAL_DELAY_MS = 120;
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -2197,14 +2199,19 @@
     return form;
   }
 
-  // 为评论行附加左/中/右三个悬停区；鼠标在某区停留 COMMENT_ZONE_HOVER_REVEAL_MS
-  // 后，该区变暗、对应图标显现（转发/评论/点赞），点击后执行对应操作。
-  // 注意这三个区作为浮层覆盖整个评论行（包括头像、昵称链接、正文里的链接），
-  // 需要对这些原有可点击元素做 pointer-events: none 禁用，再在它们上面加一层
-  // 透明捕获层，捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click
-  // 事件，从而让"悬停转发/评论/点赞区时头像、昵称、正文链接仍可点击"这种穿透
-  // 行为成立。只处理这一行自己的可交互元素，不包含嵌套回复（那些回复行会各自
-  // 单独调用本函数），靠 ownReplyList 边界排除。
+  // 为评论行附加一条覆盖整行的浮层，浮层内部把转发/评论/点赞三个按钮固定挂在
+  // 行右上角、紧挨着排成一小簇（而不是像早期版本那样铺满整行、按左/中/右三等
+  // 分成独立热区）。揭示方式：鼠标悬停在这一整行的任意位置（不需要先猜、也不
+  // 需要精确停在某一列上）满 COMMENT_ACTIONS_REVEAL_DELAY_MS 后，三个图标固定
+  // 在同一个位置一起淡入显现，用户看到全部三个功能后再选择点击哪一个。延迟本
+  // 身也从早期版本的 1 秒大幅缩短，只用来防止鼠标划过列表时图标反复闪烁，不再
+  // 是用来"确认用户是否真的想操作"的等待时间。
+  // 该浮层覆盖整个评论行（包括头像、昵称链接、正文里的链接），需要对这些原
+  // 有可点击元素做 pointer-events: none 禁用，再在它们上面加一层透明捕获层，
+  // 捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click 事件，从而让
+  // "悬停转发/评论/点赞区时头像、昵称、正文链接仍可点击"这种穿透行为成立。
+  // 只处理这一行自己的可交互元素，不包含嵌套回复（那些回复行会各自单独调用
+  // 本函数），靠 ownReplyList 边界排除。
   function attachCommentZones(commentRow, status, comment, comments, detailInteractions) {
     const rowContent = commentRow.querySelector(":scope > div");
     if (!rowContent) {
@@ -2221,6 +2228,10 @@
       el.style.pointerEvents = "none";
     });
 
+    // zoneBar 不再铺满整行、三等分成左中右热区，而是固定挂在评论行右上角的一个
+    // 紧凑图标簇（见 styles.css 对应规则），用户不需要在行内找/猜某个功能对应
+    // 哪块区域——悬停这一整行的任意位置，三个图标就会在固定的同一个位置一起
+    // 淡入，看到后直接点选想要的那个即可。
     const zoneBar = document.createElement("div");
     zoneBar.className = "weibo-grid-reader__comment-zone-bar";
 
@@ -2266,32 +2277,21 @@
       detailInteractions.openRepostWithQuote(buildCommentQuoteText(comment));
     });
 
-    let activeZone = null;
-    let revealTimer = 0;
     const zones = [repostZone, commentZone, likeZone];
+    zones.forEach((zone) => zoneBar.append(zone));
 
-    zones.forEach((zone) => {
-      zone.addEventListener("mouseenter", () => {
-        if (revealTimer) {
-          clearTimeout(revealTimer);
-        }
-        revealTimer = window.setTimeout(() => {
-          if (activeZone && activeZone !== zone) {
-            activeZone.classList.remove("weibo-grid-reader__comment-zone--revealed");
-          }
-          zone.classList.add("weibo-grid-reader__comment-zone--revealed");
-          activeZone = zone;
-        }, COMMENT_ZONE_HOVER_REVEAL_MS);
-      });
+    // 触发源从"每个 zone 各自的 mouseenter"改成"commentRow 整行的
+    // mouseenter/mouseleave"：不管鼠标落在这一行的哪个位置（头像、正文、行内
+    // 空白……），都当作同一次悬停，短暂延迟后三个图标一起显现，一起隐藏。
+    let revealTimer = 0;
 
-      zone.addEventListener("mouseleave", () => {
-        if (revealTimer) {
-          clearTimeout(revealTimer);
-          revealTimer = 0;
-        }
-      });
-
-      zoneBar.append(zone);
+    commentRow.addEventListener("mouseenter", () => {
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+      }
+      revealTimer = window.setTimeout(() => {
+        zoneBar.classList.add("weibo-grid-reader__comment-zone-bar--revealed");
+      }, COMMENT_ACTIONS_REVEAL_DELAY_MS);
     });
 
     commentRow.addEventListener("mouseleave", () => {
@@ -2299,10 +2299,7 @@
         clearTimeout(revealTimer);
         revealTimer = 0;
       }
-      if (activeZone) {
-        activeZone.classList.remove("weibo-grid-reader__comment-zone--revealed");
-        activeZone = null;
-      }
+      zoneBar.classList.remove("weibo-grid-reader__comment-zone-bar--revealed");
     });
 
     // 在原有可交互元素上方罩一层透明捕获层，捕获点击后停止冒泡、触发原始元素
@@ -2743,7 +2740,7 @@
       .filter(Boolean);
     comments.append(...commentItems);
 
-    // 递归为每一条评论行（顶层 + 嵌套回复）附加左/中/右三个悬停区：
+    // 递归为每一条评论行（顶层 + 嵌套回复）附加悬停整行即可显现的图标簇：
     // 转发（复用详情顶部的转发框，预填引用文本）/ 评论（展开内联回复输入框）/ 点赞。
     const attachZonesRecursively = (row) => {
       const commentData = row.__weiboGridComment;
