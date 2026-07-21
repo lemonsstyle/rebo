@@ -1418,10 +1418,10 @@
     }, true, true, comment);
   }
 
-  function populateStatusText(container, status) {
+  function populateStatusText(container, status, preserveLayout = false) {
     container.replaceChildren();
     const displayText = getDisplayText(status);
-    if (hasRichStatusText(status)) {
+    if ((preserveLayout && status.text) || hasRichStatusText(status)) {
       appendRichStatusText(container, status, true);
     } else {
       appendPlainTextWithLinks(container, displayText || "转发微博");
@@ -1837,7 +1837,7 @@
   function createDetailText(status, className = "weibo-grid-reader__detail-text") {
     const text = document.createElement("div");
     text.className = className;
-    populateStatusText(text, status);
+    populateStatusText(text, status, true);
     return text;
   }
 
@@ -2042,9 +2042,15 @@
       : "weibo-grid-reader__detail-post";
 
     if (isRepost) {
-      const repostAuthor = document.createElement("strong");
+      const repostAuthorProfileUrl = getProfileUrl(status.user);
+      const repostAuthor = repostAuthorProfileUrl ? document.createElement("a") : document.createElement("strong");
       repostAuthor.className = "weibo-grid-reader__detail-repost-author";
       repostAuthor.textContent = `@${status.user?.screen_name || "原微博作者"}`;
+      if (repostAuthorProfileUrl) {
+        repostAuthor.href = repostAuthorProfileUrl;
+        repostAuthor.target = "_blank";
+        repostAuthor.rel = "noopener noreferrer";
+      }
       post.append(repostAuthor);
     }
 
@@ -2069,7 +2075,7 @@
 
     const text = post.querySelector(".weibo-grid-reader__detail-text");
     if (text) {
-      populateStatusText(text, status);
+      populateStatusText(text, status, true);
       repositionActiveDetail();
     }
   }

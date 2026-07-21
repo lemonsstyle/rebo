@@ -503,6 +503,14 @@ html.weibo-grid-reader-detail-open {
 .weibo-grid-reader__detail-repost-author {
   color: #252525;
   font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.weibo-grid-reader__detail-repost-author[href]:hover,
+.weibo-grid-reader__detail-repost-author[href]:focus-visible {
+  color: #eb6f00;
+  text-decoration: underline;
 }
 
 .weibo-grid-reader__detail-text {
