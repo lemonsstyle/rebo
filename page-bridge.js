@@ -486,6 +486,59 @@
     );
   }
 
+  // 回复某一条已有评论：真实接口是独立的 /ajax/comments/reply（不是顶层评论
+  // 用的 /ajax/comments/create），已在浏览器网络面板抓包核实。字段为 id（当前
+  // 微博 id）、cid（被回复评论的 id）、comment、pic_id（图片评论用，本扩展
+  // 不支持图片评论，故不传）、is_repost=0、comment_ori=0、is_comment=0。
+  // pic_id 在抓包里是空值，postWeiboForm 本就会自动过滤掉空字符串字段，
+  // 因此这里不需要显式传 pic_id: ""，效果与真实请求一致。
+  async function createCommentReply(statusId, parentCommentId, text) {
+    const comment = String(text || "").trim();
+    if (!statusId || !parentCommentId || !comment) {
+      return { ok: false, reason: "回复内容不能为空。" };
+    }
+
+    return postWeiboForm(
+      "/ajax/comments/reply",
+      {
+        id: String(statusId),
+        cid: String(parentCommentId),
+        comment,
+        is_repost: 0,
+        comment_ori: 0,
+        is_comment: 0
+      },
+      "weibo-comment"
+    );
+  }
+
+  // 评论点赞/取消点赞：真实接口是两个独立的路径 /ajax/statuses/updateLike
+  // （点赞）与 /ajax/statuses/destroyLike（取消点赞），字段均为 object_id
+  // （评论 id）、object_type=comment，已在浏览器网络面板分别抓包核实。
+  async function setCommentLike(commentId) {
+    if (!commentId) {
+      return { ok: false, reason: "缺少评论 ID，无法点赞。" };
+    }
+
+    return postWeiboForm(
+      "/ajax/statuses/updateLike",
+      { object_id: String(commentId), object_type: "comment" },
+      "weibo-comment-like"
+    );
+  }
+
+  async function cancelCommentLike(commentId) {
+    if (!commentId) {
+      return { ok: false, reason: "缺少评论 ID，无法取消点赞。" };
+    }
+
+    return postWeiboForm(
+      "/ajax/statuses/destroyLike",
+      { object_id: String(commentId), object_type: "comment" },
+      "weibo-comment-like"
+    );
+  }
+
   async function createRepost(statusId, text) {
     if (!statusId) {
       return { ok: false, reason: "缺少微博 ID，无法转发。" };
@@ -533,9 +586,12 @@
 
     const requiresUserActivation = [
       "create-comment",
+      "create-comment-reply",
       "create-repost",
       "set-attitude",
-      "cancel-attitude"
+      "cancel-attitude",
+      "set-comment-like",
+      "cancel-comment-like"
     ].includes(message.type);
     if (requiresUserActivation && navigator.userActivation && !navigator.userActivation.isActive) {
       respond(message.requestId, { ok: false, reason: "请在详情卡片中手动发起此操作。" });
@@ -585,6 +641,24 @@
 
     if (message.type === "cancel-attitude") {
       void cancelAttitude(message.statusId).then((result) => {
+        respond(message.requestId, bridgeSessionId, result);
+      });
+    }
+
+    if (message.type === "create-comment-reply") {
+      void createCommentReply(message.statusId, message.parentCommentId, message.text).then((result) => {
+        respond(message.requestId, bridgeSessionId, result);
+      });
+    }
+
+    if (message.type === "set-comment-like") {
+      void setCommentLike(message.commentId).then((result) => {
+        respond(message.requestId, bridgeSessionId, result);
+      });
+    }
+
+    if (message.type === "cancel-comment-like") {
+      void cancelCommentLike(message.commentId).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }

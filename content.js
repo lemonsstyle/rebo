@@ -19,6 +19,9 @@
   const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
+  // 评论行左中右三个悬停区需要鼠标停留超过 1 秒才亮起，避免鼠标只是划过评论
+  // 列表时到处闪烁。
+  const COMMENT_ZONE_HOVER_REVEAL_MS = 1000;
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -966,6 +969,13 @@
 
   function isStatusLiked(status) {
     const liked = status?.attitudes_status ?? status?.attitude_status ?? status?.liked;
+    return liked === true || String(liked) === "1";
+  }
+
+  // 评论点赞状态复用微博状态点赞常见的字段命名习惯（liked / attitude_status 系列）；
+  // 真实评论响应里具体用哪个字段未核实过，缺失时按未点赞处理，不会误显示成已点赞。
+  function isCommentLiked(comment) {
+    const liked = comment?.liked ?? comment?.like_status ?? comment?.attitude_status ?? comment?.attitudes_status;
     return liked === true || String(liked) === "1";
   }
 
@@ -2110,6 +2120,228 @@
     };
   }
 
+  // 官方网页版对评论的“转发”本质仍是转发原微博，只是预填/引用了这条评论内容；
+  // 引用格式借鉴微博常见的 //@用户: 内容 转发链写法，未在真实网络面板核实过
+  // 官方网页版这里具体拼的什么格式，如果和官方实际预填内容不一致，应据此调整。
+  function buildCommentQuoteText(comment) {
+    const author = comment.user?.screen_name || "";
+    const text = plainText(comment.text_raw || comment.text || "");
+    return author ? `//@${author}: ${text}` : text;
+  }
+
+  // 评论下的内联回复框：紧跟在该评论行后面展开，提交后追加一条新回复评论
+  // （官方接口猜测为 /ajax/comments/create 加 cid 参数，见 page-bridge.js
+  // createCommentReply 的说明）。提交成功后整体刷新评论列表，保证嵌套结构、
+  // 楼中楼作者高亮等渲染逻辑与首次加载一致，不必单独维护局部 DOM 插入逻辑。
+  function createInlineReplyForm(status, comment, comments, detailInteractions, onDone) {
+    const statusId = getStatusId(status);
+    const commentId = getCommentId(comment);
+    const form = document.createElement("form");
+    form.className = "weibo-grid-reader__comment-inline-reply-form";
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "weibo-grid-reader__comment-inline-reply-input";
+    textarea.rows = 2;
+    textarea.maxLength = 140;
+    textarea.placeholder = `回复 @${comment.user?.screen_name || "微博用户"}`;
+
+    const footer = document.createElement("div");
+    footer.className = "weibo-grid-reader__comment-inline-reply-footer";
+    const feedback = document.createElement("span");
+    feedback.className = "weibo-grid-reader__comment-inline-reply-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "取消";
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.textContent = "回复";
+    footer.append(feedback, cancel, submit);
+    form.append(textarea, footer);
+
+    let pending = false;
+    cancel.addEventListener("click", () => onDone());
+    form.addEventListener("click", (event) => event.stopPropagation());
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = textarea.value.trim();
+      if (pending || !text) {
+        return;
+      }
+
+      pending = true;
+      textarea.disabled = true;
+      submit.disabled = true;
+      cancel.disabled = true;
+      feedback.textContent = "正在回复…";
+
+      const result = await bridgeRequest("create-comment-reply", { statusId, parentCommentId: commentId, text });
+      pending = false;
+
+      if (!result.ok) {
+        textarea.disabled = false;
+        submit.disabled = false;
+        cancel.disabled = false;
+        feedback.textContent = `回复失败：${result.reason || "请稍后重试"}`;
+        return;
+      }
+
+      status.comments_count = getNonNegativeCount(status.comments_count) + 1;
+      updateStatusMetric(status, "comments", "评论", status.comments_count);
+      void loadDetailComments(status, comments, detailInteractions);
+      onDone();
+    });
+
+    window.requestAnimationFrame(() => textarea.focus());
+    return form;
+  }
+
+  // 为评论行附加左/中/右三个悬停区；鼠标在某区停留 COMMENT_ZONE_HOVER_REVEAL_MS
+  // 后，该区变暗、对应图标显现（转发/评论/点赞），点击后执行对应操作。
+  // 注意这三个区作为浮层覆盖整个评论行（包括头像、昵称链接、正文里的链接），
+  // 需要对这些原有可点击元素做 pointer-events: none 禁用，再在它们上面加一层
+  // 透明捕获层，捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click
+  // 事件，从而让"悬停转发/评论/点赞区时头像、昵称、正文链接仍可点击"这种穿透
+  // 行为成立。只处理这一行自己的可交互元素，不包含嵌套回复（那些回复行会各自
+  // 单独调用本函数），靠 ownReplyList 边界排除。
+  function attachCommentZones(commentRow, status, comment, comments, detailInteractions) {
+    const rowContent = commentRow.querySelector(":scope > div");
+    if (!rowContent) {
+      return;
+    }
+
+    const ownReplyList = rowContent.querySelector(":scope > .weibo-grid-reader__comment-replies");
+    const candidates = [...commentRow.querySelectorAll("a, img, button, [role='button']")]
+      .filter((el) => !ownReplyList || !ownReplyList.contains(el));
+    // 只包一层最外层的可交互元素，跳过嵌套在其他候选元素内部的（例如评论图片
+    // 预览按钮内部还有一个 <img>），否则会重复包裹、多出一层没有意义的捕获层。
+    const interactives = candidates.filter((el) => !candidates.some((other) => other !== el && other.contains(el)));
+    interactives.forEach((el) => {
+      el.style.pointerEvents = "none";
+    });
+
+    const zoneBar = document.createElement("div");
+    zoneBar.className = "weibo-grid-reader__comment-zone-bar";
+
+    let attitudePending = false;
+    let replyFormOpen = false;
+
+    const likeZone = createCommentZone("like", () => {
+      if (attitudePending) {
+        return;
+      }
+      const wasLiked = isCommentLiked(comment);
+      attitudePending = true;
+      likeZone.classList.toggle("weibo-grid-reader__comment-zone--liked", !wasLiked);
+
+      const commentId = getCommentId(comment);
+      void bridgeRequest(wasLiked ? "cancel-comment-like" : "set-comment-like", { commentId }).then((result) => {
+        attitudePending = false;
+        if (!result.ok) {
+          likeZone.classList.toggle("weibo-grid-reader__comment-zone--liked", wasLiked);
+          likeZone.title = `操作失败：${result.reason || "请稍后重试"}`;
+          return;
+        }
+        comment.liked = !wasLiked;
+        likeZone.title = !wasLiked ? "取消点赞" : "点赞";
+      });
+    });
+    likeZone.classList.toggle("weibo-grid-reader__comment-zone--liked", isCommentLiked(comment));
+    likeZone.title = isCommentLiked(comment) ? "取消点赞" : "点赞";
+
+    const commentZone = createCommentZone("comment", () => {
+      if (replyFormOpen) {
+        return;
+      }
+      replyFormOpen = true;
+      const form = createInlineReplyForm(status, comment, comments, detailInteractions, () => {
+        form.remove();
+        replyFormOpen = false;
+      });
+      commentRow.insertAdjacentElement("afterend", form);
+    });
+
+    const repostZone = createCommentZone("repost", () => {
+      detailInteractions.openRepostWithQuote(buildCommentQuoteText(comment));
+    });
+
+    let activeZone = null;
+    let revealTimer = 0;
+    const zones = [repostZone, commentZone, likeZone];
+
+    zones.forEach((zone) => {
+      zone.addEventListener("mouseenter", () => {
+        if (revealTimer) {
+          clearTimeout(revealTimer);
+        }
+        revealTimer = window.setTimeout(() => {
+          if (activeZone && activeZone !== zone) {
+            activeZone.classList.remove("weibo-grid-reader__comment-zone--revealed");
+          }
+          zone.classList.add("weibo-grid-reader__comment-zone--revealed");
+          activeZone = zone;
+        }, COMMENT_ZONE_HOVER_REVEAL_MS);
+      });
+
+      zone.addEventListener("mouseleave", () => {
+        if (revealTimer) {
+          clearTimeout(revealTimer);
+          revealTimer = 0;
+        }
+      });
+
+      zoneBar.append(zone);
+    });
+
+    commentRow.addEventListener("mouseleave", () => {
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+        revealTimer = 0;
+      }
+      if (activeZone) {
+        activeZone.classList.remove("weibo-grid-reader__comment-zone--revealed");
+        activeZone = null;
+      }
+    });
+
+    // 在原有可交互元素上方罩一层透明捕获层，捕获点击后停止冒泡、触发原始元素
+    // 的 click 事件，从而让"悬停转发/评论/点赞区时仍可点击头像进主页"这种穿透
+    // 行为成立。捕获层必须是原元素自己的子节点（而不是紧随其后的兄弟节点），
+    // 这样 position:absolute + inset:0 才会相对原元素自身定位、精确覆盖它的
+    // 范围，而不是相对更外层的 commentRow 定位、覆盖到整行。这里只在原元素上
+    // 就地设置 position:relative，不额外包一层 wrapper 元素——原评论行里的
+    // 候选元素（头像链接、昵称链接、正文链接、评论图片预览按钮）都不是 <img>
+    // 这类不能渲染子节点的替换元素，可以安全地直接 append 子节点；<img> 只会
+    // 嵌套出现在这些候选元素内部，已经被上面的“只保留最外层”过滤逻辑排除。
+    interactives.forEach((original) => {
+      const shield = document.createElement("span");
+      shield.className = "weibo-grid-reader__comment-zone-shield";
+      shield.setAttribute("aria-hidden", "true");
+      original.style.position = "relative";
+      original.append(shield);
+      shield.addEventListener("click", (event) => {
+        event.stopPropagation();
+        original.click();
+      });
+    });
+
+    commentRow.style.position = "relative";
+    commentRow.append(zoneBar);
+  }
+
+  function createCommentZone(type, onClick) {
+    const zone = document.createElement("button");
+    zone.type = "button";
+    zone.className = `weibo-grid-reader__comment-zone weibo-grid-reader__comment-zone--${type}`;
+    zone.append(createCommentZoneIcon(type));
+    zone.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onClick();
+    });
+    return zone;
+  }
+
   function createCommentItem(comment, commentsById, renderedCommentIds, postAuthorId, depth = 0) {
     const commentId = getCommentId(comment);
     if (commentId && renderedCommentIds.has(commentId)) {
@@ -2186,12 +2418,16 @@
     }
 
     item.append(avatarLink, content);
+    // 把原始评论数据挂在 DOM 上，供悬停区的转发/评论/点赞回调使用
+    item.__weiboGridComment = comment;
     return item;
   }
 
-  function createDetailActionIcon(type) {
+  // className 前缀由调用方决定，同一套图标几何形状同时供详情顶部的转发/评论/点赞
+  // 按钮和评论行悬停区域的图标复用，避免维护两份重复的 SVG 路径。
+  function createActionIcon(type, iconClassName) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.classList.add("weibo-grid-reader__detail-action-icon", `weibo-grid-reader__detail-action-icon--${type}`);
+    svg.classList.add(iconClassName, `${iconClassName}--${type}`);
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("fill", "none");
@@ -2224,6 +2460,14 @@
 
     addPath("M12 20s-7-4.4-7-9.2C5 8 6.8 6.5 8.9 6.5c1.3 0 2.5.7 3.1 1.8.6-1.1 1.8-1.8 3.1-1.8 2.1 0 3.9 1.5 3.9 4.3C19 15.6 12 20 12 20Z");
     return svg;
+  }
+
+  function createDetailActionIcon(type) {
+    return createActionIcon(type, "weibo-grid-reader__detail-action-icon");
+  }
+
+  function createCommentZoneIcon(type) {
+    return createActionIcon(type, "weibo-grid-reader__comment-zone-icon");
   }
 
   function createDetailInteractions(status, heading, comments) {
@@ -2425,7 +2669,7 @@
         updateCommentHeading();
         updateStatusMetric(status, "comments", "评论", status.comments_count);
         feedback.textContent = "评论已发布";
-        void loadDetailComments(status, comments);
+        void loadDetailComments(status, comments, api);
       }
       updateActionLabels();
       updateComposer();
@@ -2435,10 +2679,38 @@
     updateComposer();
     actionBar.append(repostButton, commentButton, likeButton);
     interactions.append(actionBar, commentForm, feedback);
-    return { interactions };
+
+    // 供评论行左侧“转发”悬停区调用：复用同一个转发框，预填引用文本，
+    // 而不是另外实现一套转发逻辑（官方网页版对评论的“转发”本质仍是转发原微博）。
+    // 引用文本用 textarea.value = ... 程序化赋值，浏览器不会像用户输入那样自动
+    // 截断到 maxLength；若原评论较长，拼出的引用可能超过 140 字，原生表单校验会
+    // 因为“值超出 maxlength”静默拒绝提交（点击“转发”按钮没有任何反应），因此
+    // 这里主动裁剪到 maxLength，保证一定能提交成功。
+    const openRepostWithQuote = (quoteText) => {
+      const clippedQuoteText = quoteText.length > textarea.maxLength
+        ? `${quoteText.slice(0, textarea.maxLength - 1)}…`
+        : quoteText;
+      if (activeComposer !== "repost") {
+        drafts.repost = clippedQuoteText;
+        activeComposer = "repost";
+      } else {
+        drafts.repost = clippedQuoteText;
+      }
+      textarea.value = clippedQuoteText;
+      updateComposer();
+      window.requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(0, 0);
+      });
+    };
+
+    // api 需要在 submit 回调触发前就存在（回调是异步的，实际执行时早已定义完毕，
+    // 这里只是让声明顺序更直观），供评论区悬停操作和自身刷新评论列表复用同一份接口。
+    const api = { interactions, openRepostWithQuote };
+    return api;
   }
 
-  async function loadDetailComments(status, comments) {
+  async function loadDetailComments(status, comments, detailInteractions) {
     const statusId = getStatusId(status);
     const requestVersion = Number(comments.dataset.weiboGridLoadVersion || 0) + 1;
     comments.dataset.weiboGridLoadVersion = String(requestVersion);
@@ -2470,6 +2742,19 @@
       .map((comment) => createCommentItem(comment, commentsById, renderedCommentIds, postAuthorId))
       .filter(Boolean);
     comments.append(...commentItems);
+
+    // 递归为每一条评论行（顶层 + 嵌套回复）附加左/中/右三个悬停区：
+    // 转发（复用详情顶部的转发框，预填引用文本）/ 评论（展开内联回复输入框）/ 点赞。
+    const attachZonesRecursively = (row) => {
+      const commentData = row.__weiboGridComment;
+      if (commentData) {
+        attachCommentZones(row, status, commentData, comments, detailInteractions);
+      }
+      const nestedRows = row.querySelectorAll(":scope > div > .weibo-grid-reader__comment-replies > .weibo-grid-reader__comment");
+      nestedRows.forEach(attachZonesRecursively);
+    };
+    commentItems.forEach(attachZonesRecursively);
+
     repositionActiveDetail();
   }
 
@@ -2734,7 +3019,7 @@
     if (repostPost) {
       void hydrateDetailLongText(status.retweeted_status, repostPost);
     }
-    void loadDetailComments(status, comments);
+    void loadDetailComments(status, comments, detailInteractions);
   }
 
   function renderStatuses(statuses) {
