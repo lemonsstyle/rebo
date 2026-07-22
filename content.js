@@ -2245,39 +2245,15 @@
     return form;
   }
 
-  // 为评论行附加一条覆盖整行但始终允许鼠标穿透的定位层，层内把转发/评论/点赞
-  // 三个按钮固定挂在行右上角、紧挨着排成一小簇（而不是像早期版本那样铺满整行、
-  // 按左/中/右三等分成独立热区）。揭示方式：鼠标悬停在这一整行的任意位置（不需要先猜、也不
-  // 需要精确停在某一列上）满 COMMENT_ACTIONS_REVEAL_DELAY_MS 后，三个图标固定
-  // 在同一个位置一起淡入显现，用户看到全部三个功能后再选择点击哪一个。延迟本
-  // 身也从早期版本的 1 秒大幅缩短，只用来防止鼠标划过列表时图标反复闪烁，不再
-  // 是用来"确认用户是否真的想操作"的等待时间。
-  // 定位层本身始终 pointer-events: none，显现时只让三个实际按钮接收鼠标，避免
-  // 父评论的定位层覆盖嵌套回复正文。头像、昵称链接、正文里的链接仍通过透明捕获
-  // 层恢复点击；捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click 事件，从而让
-  // "悬停转发/评论/点赞区时头像、昵称、正文链接仍可点击"这种穿透行为成立。
-  // 只处理这一行自己的可交互元素，不包含嵌套回复（那些回复行会各自单独调用
-  // 本函数），靠 ownReplyList 边界排除。
+  // 每条评论都有独立的头部行：左侧是用户名或“博主”标签，右侧是转发/评论/点赞
+  // 图标簇。按钮处于正常文档流，不覆盖正文或嵌套回复；悬停评论行任意位置满
+  // COMMENT_ACTIONS_REVEAL_DELAY_MS 后三个按钮一起淡入。
   function attachCommentZones(commentRow, status, comment, comments, detailInteractions) {
-    const rowContent = commentRow.querySelector(":scope > div");
-    if (!rowContent) {
+    const rowContent = commentRow.querySelector(":scope > .weibo-grid-reader__comment-content");
+    const rowHeader = rowContent?.querySelector(":scope > .weibo-grid-reader__comment-header");
+    if (!rowHeader) {
       return;
     }
-
-    const ownReplyList = rowContent.querySelector(":scope > .weibo-grid-reader__comment-replies");
-    const candidates = [...commentRow.querySelectorAll("a, img, button, [role='button']")]
-      .filter((el) => !ownReplyList || !ownReplyList.contains(el));
-    // 只包一层最外层的可交互元素，跳过嵌套在其他候选元素内部的（例如评论图片
-    // 预览按钮内部还有一个 <img>），否则会重复包裹、多出一层没有意义的捕获层。
-    const interactives = candidates.filter((el) => !candidates.some((other) => other !== el && other.contains(el)));
-    interactives.forEach((el) => {
-      el.style.pointerEvents = "none";
-    });
-
-    // zoneBar 不再铺满整行、三等分成左中右热区，而是固定挂在评论行右上角的一个
-    // 紧凑图标簇（见 styles.css 对应规则），用户不需要在行内找/猜某个功能对应
-    // 哪块区域——悬停这一整行的任意位置，三个图标就会在固定的同一个位置一起
-    // 淡入，看到后直接点选想要的那个即可。
     const zoneBar = document.createElement("div");
     zoneBar.className = "weibo-grid-reader__comment-zone-bar";
 
@@ -2329,9 +2305,12 @@
     // mouseover/mouseout 会冒泡，因此用离事件目标最近的评论行判断事件归属：鼠标
     // 落在嵌套回复时只显现该回复自己的按钮，不会同时激活包含它的父评论。
     let revealTimer = 0;
-    const getClosestCommentRow = (target) => target instanceof Element
-      ? target.closest(".weibo-grid-reader__comment")
-      : null;
+    const getClosestCommentRow = (target) => {
+      if (!(target instanceof Element) || target.closest(".weibo-grid-reader__comment-inline-reply-form")) {
+        return null;
+      }
+      return target.closest(".weibo-grid-reader__comment");
+    };
 
     commentRow.addEventListener("mouseover", (event) => {
       if (
@@ -2363,29 +2342,7 @@
       zoneBar.classList.remove("weibo-grid-reader__comment-zone-bar--revealed");
     });
 
-    // 在原有可交互元素上方罩一层透明捕获层，捕获点击后停止冒泡、触发原始元素
-    // 的 click 事件，从而让"悬停转发/评论/点赞区时仍可点击头像进主页"这种穿透
-    // 行为成立。捕获层必须是原元素自己的子节点（而不是紧随其后的兄弟节点），
-    // 这样 position:absolute + inset:0 才会相对原元素自身定位、精确覆盖它的
-    // 范围，而不是相对更外层的 commentRow 定位、覆盖到整行。这里只在原元素上
-    // 就地设置 position:relative，不额外包一层 wrapper 元素——原评论行里的
-    // 候选元素（头像链接、昵称链接、正文链接、评论图片预览按钮）都不是 <img>
-    // 这类不能渲染子节点的替换元素，可以安全地直接 append 子节点；<img> 只会
-    // 嵌套出现在这些候选元素内部，已经被上面的“只保留最外层”过滤逻辑排除。
-    interactives.forEach((original) => {
-      const shield = document.createElement("span");
-      shield.className = "weibo-grid-reader__comment-zone-shield";
-      shield.setAttribute("aria-hidden", "true");
-      original.style.position = "relative";
-      original.append(shield);
-      shield.addEventListener("click", (event) => {
-        event.stopPropagation();
-        original.click();
-      });
-    });
-
-    commentRow.style.position = "relative";
-    commentRow.append(zoneBar);
+    rowHeader.append(zoneBar);
   }
 
   function createCommentZone(type, onClick) {
@@ -2433,6 +2390,9 @@
     avatarLink.append(avatar);
 
     const content = document.createElement("div");
+    content.className = "weibo-grid-reader__comment-content";
+    const header = document.createElement("div");
+    header.className = "weibo-grid-reader__comment-header";
     const name = profileUrl ? document.createElement("a") : document.createElement("strong");
     name.className = "weibo-grid-reader__comment-name";
     name.textContent = comment.user?.screen_name || "微博用户";
@@ -2457,10 +2417,16 @@
     } else {
       appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true, comment);
     }
-    if (!isPostAuthorReply) {
-      content.append(name);
+    if (isPostAuthorReply) {
+      const authorBadge = document.createElement("span");
+      authorBadge.className = "weibo-grid-reader__comment-author-badge";
+      authorBadge.textContent = "博主";
+      authorBadge.title = comment.user?.screen_name || "微博博主";
+      header.append(authorBadge);
+    } else {
+      header.append(name);
     }
-    content.append(text);
+    content.append(header, text);
 
     const replies = getCommentReplies(comment);
     if (replies.length && depth < 2) {
@@ -2808,7 +2774,7 @@
       if (commentData) {
         attachCommentZones(row, status, commentData, comments, detailInteractions);
       }
-      const nestedRows = row.querySelectorAll(":scope > div > .weibo-grid-reader__comment-replies > .weibo-grid-reader__comment");
+      const nestedRows = row.querySelectorAll(":scope > .weibo-grid-reader__comment-content > .weibo-grid-reader__comment-replies > .weibo-grid-reader__comment");
       nestedRows.forEach(attachZonesRecursively);
     };
     commentItems.forEach(attachZonesRecursively);

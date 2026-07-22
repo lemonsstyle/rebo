@@ -212,7 +212,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 ### 9.1 评论的转发、回复、点赞（整行悬停 + 固定图标簇）
 
-每条评论行（含嵌套回复）——头像、昵称、正文这一整块——挂了一条覆盖整行但始终保持 `pointer-events: none` 的透明定位层，内部把转发/评论/点赞三个按钮固定排成一小簇，贴在行的右上角；鼠标悬停这一整行的任意位置（不需要先猜、也不需要精确停在某个子区域）满 `COMMENT_ACTIONS_REVEAL_DELAY_MS`（120ms）后，三个图标一起淡入，只有三个实际按钮恢复 `pointer-events: auto`。悬停事件按事件目标最近的 `.weibo-grid-reader__comment` 归属，因此鼠标位于嵌套回复正文时只激活该回复自己的按钮，父评论定位层不会抢走鼠标命中。头像链接、昵称链接、正文里的 @提及/图片预览等原有可点击元素会被临时禁用 `pointer-events`，再在每个元素自身内部罩一层绝对定位的透明捕获层恢复点击；只处理该评论行自己范围内的元素，嵌套回复各自单独处理。图标簇容器选择器写成 `.weibo-grid-reader__comment > .weibo-grid-reader__comment-zone-bar`，以避免被 `.weibo-grid-reader__comment > div { display: grid; }` 改成纵向布局。
+每条评论行（含嵌套回复）的内容区拆成固定头部行和正文行：普通评论头部左侧显示用户名，博主回复不重复完整昵称、改为显示紧凑的“博主”标签；转发/评论/点赞图标簇处于同一头部行右侧的正常文档流中，因此不会覆盖正文。鼠标悬停这一整行的任意位置满 `COMMENT_ACTIONS_REVEAL_DELAY_MS`（120ms）后，三个图标一起淡入并恢复点击。悬停事件按事件目标最近的 `.weibo-grid-reader__comment` 归属，嵌套回复只激活自己的按钮。由于操作区不再是覆盖整行的绝对定位浮层，头像、用户名、正文 @ 提及和图片预览都直接使用原生点击事件，不再需要透明捕获层转发点击。
 
 - **转发**：官方网页版对评论的“转发”本质仍是转发原微博，只是预填/引用了评论内容；复用详情顶部的转发框（`createDetailInteractions` 返回的 `openRepostWithQuote`），预填格式为 `//@昵称: 评论正文`，超过 140 字截断并加省略号（避免原生 `maxlength` 校验因程序化赋值超长而静默拒绝提交）。**未在真实网络面板核实过官方网页版预填的具体格式**，如与实际不一致应据此调整。
 - **评论（回复）**：在该评论行下方展开一个内联输入框（`createInlineReplyForm`），提交后请求 `POST /ajax/comments/reply`（**已抓包核实**——是独立于顶层评论 `/ajax/comments/create` 的另一个接口，最初误用 `create` + `cid` 实现，效果是把回复发成了对整条微博的普通评论），字段为 `id`（当前微博 id）、`cid`（被回复评论的 id）、`comment`、`is_repost=0`、`comment_ori=0`、`is_comment=0`；抓包里还出现了 `pic_id`（图片评论用，本扩展不支持图片评论、留空即可，`postWeiboForm` 会自动过滤空字符串字段）。成功后整体重新调用 `fetchComments` 刷新评论列表，而不是手工插入一条新 DOM 节点，以保证嵌套结构、楼中楼作者高亮等渲染逻辑与首次加载完全一致。
