@@ -1014,10 +1014,10 @@ html.weibo-grid-reader-detail-open {
    头像旁那个包正文的 div）；zoneBar 同样是评论行的直接 div 子元素，会被那条选
    择器命中，如果不提高优先级，它的 display 会被强制改成 grid（单列纵向堆叠），
    而不是这里想要的横向 flex 图标簇。
-   zoneBar 本身仍铺满整行（inset:0），但默认 pointer-events: none——它只是用来把
+   zoneBar 本身仍铺满整行（inset:0），并始终保持 pointer-events: none——它只用来把
    三个图标定位在行内固定的右上角，不再像旧版那样把整行拆成三等分的独立热区；
-   是否可点击完全由 --revealed 修饰类控制，未悬停时这片区域对下方内容（头像/
-   昵称/正文链接）完全透明穿透。 */
+   显现时仅三个实际按钮恢复 pointer-events: auto，因此父评论的定位层不会覆盖或
+   抢走嵌套回复正文的鼠标命中。 */
 .weibo-grid-reader__comment > .weibo-grid-reader__comment-zone-bar {
   align-items: flex-start;
   display: flex;
@@ -1030,10 +1030,6 @@ html.weibo-grid-reader-detail-open {
   top: 0;
   width: 100%;
   z-index: 1;
-}
-
-.weibo-grid-reader__comment > .weibo-grid-reader__comment-zone-bar--revealed {
-  pointer-events: auto;
 }
 
 .weibo-grid-reader__comment-zone {
@@ -1050,6 +1046,7 @@ html.weibo-grid-reader-detail-open {
   margin: 0;
   opacity: 0;
   padding: 0;
+  pointer-events: none;
   position: relative;
   transition: background-color 0.15s ease-out, opacity 0.15s ease-out;
   width: 24px;
@@ -1061,6 +1058,7 @@ html.weibo-grid-reader-detail-open {
    高亮反馈交给原生 :hover，不需要额外的 JS 状态。 */
 .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {

@@ -1011,6 +1011,46 @@
     }
   }
 
+  function getRichTextAnchorHref(anchor) {
+    for (const attributeName of ["href", "data-url", "data-href"]) {
+      const attributeValue = anchor.getAttribute(attributeName) || "";
+      if (!attributeValue || attributeValue === "#") {
+        continue;
+      }
+      const href = getSafeLinkHref(attributeValue);
+      if (href) {
+        return href;
+      }
+    }
+
+    const userCard = anchor.getAttribute("usercard") || anchor.getAttribute("data-usercard") || "";
+    const queryStart = userCard.indexOf("?");
+    const userCardParams = new URLSearchParams(queryStart >= 0 ? userCard.slice(queryStart + 1) : userCard);
+    const userId = anchor.getAttribute("data-user-id")
+      || anchor.getAttribute("data-uid")
+      || userCardParams.get("id")
+      || userCardParams.get("uid")
+      || "";
+    if (/^\d+$/.test(userId)) {
+      return getProfileUrl({ idstr: userId });
+    }
+
+    const userName = userCardParams.get("name") || "";
+    if (userName) {
+      return `https://weibo.com/n/${encodeURIComponent(userName)}`;
+    }
+
+    const anchorText = anchor.textContent?.trim() || "";
+    if (userCard && anchorText.startsWith("@")) {
+      const mentionName = anchorText.slice(1).replace(/[：:]$/, "").trim();
+      if (mentionName) {
+        return `https://weibo.com/n/${encodeURIComponent(mentionName)}`;
+      }
+    }
+
+    return "";
+  }
+
   function createRichLink(href, textContent = "", preserveReferrer = false) {
     const link = document.createElement("a");
     const imageViewerLink = isNativeImageLink(href);
@@ -1391,7 +1431,7 @@
         }
 
         if (node.tagName === "A") {
-          const href = getSafeLinkHref(node.getAttribute("href") || "");
+          const href = getRichTextAnchorHref(node);
           if (href) {
             if (renderCommentImages && isWeiboImageLink(href)) {
               target.append(createCommentImagePreview(href, comment));
@@ -2205,16 +2245,16 @@
     return form;
   }
 
-  // 为评论行附加一条覆盖整行的浮层，浮层内部把转发/评论/点赞三个按钮固定挂在
-  // 行右上角、紧挨着排成一小簇（而不是像早期版本那样铺满整行、按左/中/右三等
-  // 分成独立热区）。揭示方式：鼠标悬停在这一整行的任意位置（不需要先猜、也不
+  // 为评论行附加一条覆盖整行但始终允许鼠标穿透的定位层，层内把转发/评论/点赞
+  // 三个按钮固定挂在行右上角、紧挨着排成一小簇（而不是像早期版本那样铺满整行、
+  // 按左/中/右三等分成独立热区）。揭示方式：鼠标悬停在这一整行的任意位置（不需要先猜、也不
   // 需要精确停在某一列上）满 COMMENT_ACTIONS_REVEAL_DELAY_MS 后，三个图标固定
   // 在同一个位置一起淡入显现，用户看到全部三个功能后再选择点击哪一个。延迟本
   // 身也从早期版本的 1 秒大幅缩短，只用来防止鼠标划过列表时图标反复闪烁，不再
   // 是用来"确认用户是否真的想操作"的等待时间。
-  // 该浮层覆盖整个评论行（包括头像、昵称链接、正文里的链接），需要对这些原
-  // 有可点击元素做 pointer-events: none 禁用，再在它们上面加一层透明捕获层，
-  // 捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click 事件，从而让
+  // 定位层本身始终 pointer-events: none，显现时只让三个实际按钮接收鼠标，避免
+  // 父评论的定位层覆盖嵌套回复正文。头像、昵称链接、正文里的链接仍通过透明捕获
+  // 层恢复点击；捕获层收到点击后停止冒泡、改为直接触发原始链接/元素的 click 事件，从而让
   // "悬停转发/评论/点赞区时头像、昵称、正文链接仍可点击"这种穿透行为成立。
   // 只处理这一行自己的可交互元素，不包含嵌套回复（那些回复行会各自单独调用
   // 本函数），靠 ownReplyList 边界排除。
@@ -2286,23 +2326,38 @@
     const zones = [repostZone, commentZone, likeZone];
     zones.forEach((zone) => zoneBar.append(zone));
 
-    // 触发源从"每个 zone 各自的 mouseenter"改成"commentRow 整行的
-    // mouseenter/mouseleave"：不管鼠标落在这一行的哪个位置（头像、正文、行内
-    // 空白……），都当作同一次悬停，短暂延迟后三个图标一起显现，一起隐藏。
+    // mouseover/mouseout 会冒泡，因此用离事件目标最近的评论行判断事件归属：鼠标
+    // 落在嵌套回复时只显现该回复自己的按钮，不会同时激活包含它的父评论。
     let revealTimer = 0;
+    const getClosestCommentRow = (target) => target instanceof Element
+      ? target.closest(".weibo-grid-reader__comment")
+      : null;
 
-    commentRow.addEventListener("mouseenter", () => {
+    commentRow.addEventListener("mouseover", (event) => {
+      if (
+        getClosestCommentRow(event.target) !== commentRow
+        || getClosestCommentRow(event.relatedTarget) === commentRow
+      ) {
+        return;
+      }
       if (revealTimer) {
-        clearTimeout(revealTimer);
+        window.clearTimeout(revealTimer);
       }
       revealTimer = window.setTimeout(() => {
+        revealTimer = 0;
         zoneBar.classList.add("weibo-grid-reader__comment-zone-bar--revealed");
       }, COMMENT_ACTIONS_REVEAL_DELAY_MS);
     });
 
-    commentRow.addEventListener("mouseleave", () => {
+    commentRow.addEventListener("mouseout", (event) => {
+      if (
+        getClosestCommentRow(event.target) !== commentRow
+        || getClosestCommentRow(event.relatedTarget) === commentRow
+      ) {
+        return;
+      }
       if (revealTimer) {
-        clearTimeout(revealTimer);
+        window.clearTimeout(revealTimer);
         revealTimer = 0;
       }
       zoneBar.classList.remove("weibo-grid-reader__comment-zone-bar--revealed");
