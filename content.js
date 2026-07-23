@@ -1290,13 +1290,13 @@
     }
 
     const url = new URL(normalized);
-    const match = url.pathname.match(/^\/(?:large|mw\d+|orj360|bmiddle|thumbnail|thumb\d+)\/(.+)$/i);
+    const match = url.pathname.match(/^\/(?:original|large|mw\d+|orj\d+|bmiddle|thumbnail|thumb\d+|small|square|wap\d+)\/(.+)$/i);
     if (!match) {
       return [url.href];
     }
 
     const variants = [];
-    for (const size of [url.pathname.split("/")[1], "orj360", "mw1024", "mw690", "thumbnail"]) {
+    for (const size of ["large", "mw2048", "original", "mw1024", "mw690", "bmiddle", "orj360", "thumbnail"]) {
       const candidate = new URL(url.href);
       candidate.pathname = `/${size}/${match[1]}`;
       if (!variants.includes(candidate.href)) {
@@ -1304,6 +1304,39 @@
       }
     }
     return variants;
+  }
+
+  function getCommentImageQualityRank(value) {
+    try {
+      const pathname = new URL(value, window.location.href).pathname.toLowerCase();
+      if (/(?:^|\/)large\//.test(pathname)) {
+        return 100;
+      }
+      if (/(?:^|\/)mw2048\//.test(pathname)) {
+        return 95;
+      }
+      if (/(?:^|\/)original\//.test(pathname)) {
+        return 92;
+      }
+      if (/(?:^|\/)mw1024\//.test(pathname)) {
+        return 80;
+      }
+      if (/(?:^|\/)mw690\//.test(pathname)) {
+        return 70;
+      }
+      if (/(?:^|\/)bmiddle\//.test(pathname)) {
+        return 60;
+      }
+      if (/(?:^|\/)orj\d+\//.test(pathname)) {
+        return 50;
+      }
+      if (/(?:^|\/)(?:thumbnail|thumb\d+|small|square|wap\d+)\//.test(pathname)) {
+        return 10;
+      }
+    } catch {
+      return 0;
+    }
+    return 40;
   }
 
   function getCommentImageSources(comment, value) {
@@ -1320,7 +1353,10 @@
       getCommentImageVariants(directUrl).forEach((variant) => addCommentImageUrl(sources, variant));
     }
     getCommentImageVariants(value).forEach((variant) => addCommentImageUrl(sources, variant));
-    return sources;
+    return sources
+      .map((url, index) => ({ url, index, rank: getCommentImageQualityRank(url) }))
+      .sort((first, second) => second.rank - first.rank || first.index - second.index)
+      .map(({ url }) => url);
   }
 
   function getNativeImageViewerUrl() {
