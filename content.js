@@ -16,6 +16,14 @@
     4: { label: "适中" },
     5: { label: "密集" }
   });
+  const VIDEO_QUALITY_LEVELS = Object.freeze({
+    original: { key: "original", label: "原画", rank: 5 },
+    ultra: { key: "ultra", label: "超清", rank: 4 },
+    high: { key: "high", label: "高清", rank: 3 },
+    standard: { key: "standard", label: "标清", rank: 2 },
+    smooth: { key: "smooth", label: "流畅", rank: 1 },
+    automatic: { key: "automatic", label: "自动", rank: 0 }
+  });
   const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
@@ -65,6 +73,7 @@
   let lastUrl = window.location.href;
   const readerSeenIds = new Set();
   const masonryCardState = new WeakMap();
+  const detailCommentStates = new WeakMap();
   const longTextCache = new Map();
   const pendingLongTextRequests = new Map();
   const pendingBridgeRequests = new Map();
@@ -865,6 +874,119 @@
     return urls;
   }
 
+  function getVideoQualityByResolution(resolution) {
+    if (resolution >= 1440) {
+      return VIDEO_QUALITY_LEVELS.original;
+    }
+    if (resolution >= 1080) {
+      return VIDEO_QUALITY_LEVELS.ultra;
+    }
+    if (resolution >= 720) {
+      return VIDEO_QUALITY_LEVELS.high;
+    }
+    if (resolution >= 480) {
+      return VIDEO_QUALITY_LEVELS.standard;
+    }
+    if (resolution > 0) {
+      return VIDEO_QUALITY_LEVELS.smooth;
+    }
+    return null;
+  }
+
+  function getPlaybackVideoQuality(item) {
+    const playInfo = item?.play_info || {};
+    const width = Number(playInfo.width || item?.width);
+    const height = Number(playInfo.height || item?.height);
+    if (width > 0 && height > 0) {
+      return getVideoQualityByResolution(Math.min(width, height));
+    }
+
+    const explicitLabels = [
+      item?.quality_desc,
+      item?.quality_name,
+      item?.quality_label,
+      item?.definition,
+      playInfo.quality_desc,
+      playInfo.quality_name,
+      playInfo.quality_label,
+      playInfo.definition
+    ].filter((value) => typeof value === "string" && value.trim());
+    if (!explicitLabels.length) {
+      return null;
+    }
+
+    const normalizedLabel = explicitLabels.join(" ").toLowerCase();
+    if (/(?:原画|4k|2160|2k|1440)/i.test(normalizedLabel)) {
+      return VIDEO_QUALITY_LEVELS.original;
+    }
+    if (/(?:超清|蓝光|1080|fhd)/i.test(normalizedLabel)) {
+      return VIDEO_QUALITY_LEVELS.ultra;
+    }
+    if (/(?:高清|720|(?:^|[^a-z])hd(?:$|[^a-z]))/i.test(normalizedLabel)) {
+      return VIDEO_QUALITY_LEVELS.high;
+    }
+    if (/(?:标清|480|540|(?:^|[^a-z])sd(?:$|[^a-z]))/i.test(normalizedLabel)) {
+      return VIDEO_QUALITY_LEVELS.standard;
+    }
+    if (/(?:流畅|省流|极速|360|240|180|(?:^|[^a-z])ld(?:$|[^a-z]))/i.test(normalizedLabel)) {
+      return VIDEO_QUALITY_LEVELS.smooth;
+    }
+    return null;
+  }
+
+  function getVideoSources(mediaInfo) {
+    const sourcesByQuality = new Map();
+    const seenUrls = new Set();
+    const fallbackUrls = [];
+    const addSource = (value, quality) => {
+      const url = typeof value === "string" ? value.trim() : "";
+      if (!url) {
+        return;
+      }
+
+      if (!quality) {
+        if (!fallbackUrls.includes(url)) {
+          fallbackUrls.push(url);
+        }
+        return;
+      }
+      if (seenUrls.has(url)) {
+        return;
+      }
+      seenUrls.add(url);
+      const existingSource = sourcesByQuality.get(quality.key);
+      if (existingSource) {
+        existingSource.urls.push(url);
+        return;
+      }
+      sourcesByQuality.set(quality.key, {
+        urls: [url],
+        label: quality.label,
+        rank: quality.rank
+      });
+    };
+
+    const playbackList = Array.isArray(mediaInfo.playback_list) ? mediaInfo.playback_list : [];
+    playbackList.forEach((item) => {
+      addSource(item?.play_info?.url, getPlaybackVideoQuality(item));
+    });
+
+    addSource(mediaInfo.stream_url_hd, VIDEO_QUALITY_LEVELS.high);
+    addSource(mediaInfo.mp4_hd_url, VIDEO_QUALITY_LEVELS.high);
+    addSource(mediaInfo.stream_url, VIDEO_QUALITY_LEVELS.standard);
+    addSource(mediaInfo.mp4_sd_url, VIDEO_QUALITY_LEVELS.standard);
+    fallbackUrls.forEach((url) => addSource(url, VIDEO_QUALITY_LEVELS.automatic));
+
+    const sources = [...sourcesByQuality.values()]
+      .sort((first, second) => second.rank - first.rank)
+      .map(({ urls, label }) => ({
+        url: urls[0],
+        alternates: urls.slice(1),
+        label
+      }));
+    return sources;
+  }
+
   function getVideoMedia(status) {
     const pageInfo = status.page_info || status.pageInfo || {};
     const candidates = [{
@@ -883,16 +1005,12 @@
 
     for (const candidate of candidates) {
       const { mediaInfo, pageInfo: sourcePageInfo } = candidate;
-      const playbackSource = mediaInfo.playback_list?.find((item) => item.play_info?.url)?.play_info?.url;
-      const source = mediaInfo.stream_url_hd
-        || mediaInfo.stream_url
-        || mediaInfo.mp4_hd_url
-        || mediaInfo.mp4_sd_url
-        || playbackSource
-        || "";
+      const sources = getVideoSources(mediaInfo);
+      const source = sources[0]?.url || "";
       if (source) {
         return {
           source,
+          sources,
           poster: sourcePageInfo?.page_pic || mediaInfo.poster || "",
           pageUrl: sourcePageInfo?.page_url || ""
         };
@@ -1656,8 +1774,84 @@
       video.poster = videoMedia.poster;
     }
 
-    video.addEventListener("loadedmetadata", scheduleMasonryLayout, { once: true });
-    video.addEventListener("error", () => {
+    const sources = videoMedia.sources?.length
+      ? videoMedia.sources
+      : [{ url: videoMedia.source, alternates: [], label: "默认" }];
+    let activeSourceIndex = Math.max(0, sources.findIndex((source) => (
+      source.url === videoMedia.source || source.alternates?.includes(videoMedia.source)
+    )));
+    let activeSourceUrl = videoMedia.source;
+    let sourceChangeVersion = 0;
+    let pendingPlaybackState = null;
+    let qualitySelect = null;
+    let fallbackShown = false;
+    const failedSourceIndexes = new Set();
+    const failedSourceUrls = new Set();
+
+    const getSourceUrls = (sourceIndex) => {
+      const source = sources[sourceIndex];
+      return source ? [source.url, ...(source.alternates || [])] : [];
+    };
+
+    const getAvailableSourceUrl = (sourceIndex) => (
+      getSourceUrls(sourceIndex).find((url) => !failedSourceUrls.has(url)) || ""
+    );
+
+    const getPlaybackState = () => ({
+      currentTime: Number.isFinite(video.currentTime) ? video.currentTime : 0,
+      muted: video.muted,
+      playbackRate: video.playbackRate,
+      volume: video.volume,
+      wasPlaying: !video.paused && !video.ended
+    });
+
+    const restorePlaybackState = (playbackState) => {
+      video.muted = playbackState.muted;
+      video.playbackRate = playbackState.playbackRate;
+      video.volume = playbackState.volume;
+      if (playbackState.currentTime > 0) {
+        const maximumTime = Number.isFinite(video.duration) && video.duration > 0
+          ? Math.max(0, video.duration - 0.05)
+          : playbackState.currentTime;
+        video.currentTime = Math.min(playbackState.currentTime, maximumTime);
+      }
+      if (playbackState.wasPlaying) {
+        video.play().catch(() => {});
+      }
+    };
+
+    const switchSource = (sourceIndex, playbackState, sourceUrl = getAvailableSourceUrl(sourceIndex)) => {
+      const nextSource = sources[sourceIndex];
+      if (!nextSource || !sourceUrl) {
+        return;
+      }
+
+      activeSourceIndex = sourceIndex;
+      activeSourceUrl = sourceUrl;
+      pendingPlaybackState = pendingPlaybackState || playbackState;
+      sourceChangeVersion += 1;
+      const currentVersion = sourceChangeVersion;
+      if (qualitySelect) {
+        qualitySelect.value = String(sourceIndex);
+      }
+      video.addEventListener("loadedmetadata", () => {
+        if (currentVersion !== sourceChangeVersion || !pendingPlaybackState) {
+          return;
+        }
+        const stateToRestore = pendingPlaybackState;
+        pendingPlaybackState = null;
+        restorePlaybackState(stateToRestore);
+      }, { once: true });
+      video.src = sourceUrl;
+      video.load();
+    };
+
+    const showVideoFallback = () => {
+      if (fallbackShown) {
+        return;
+      }
+      fallbackShown = true;
+      qualitySelect?.remove();
       if (!videoMedia.pageUrl) {
         videoWrap.remove();
         scheduleMasonryLayout();
@@ -1669,9 +1863,74 @@
       fallback.textContent = "视频无法预览，点击卡片打开微博观看";
       video.replaceWith(fallback);
       scheduleMasonryLayout();
-    }, { once: true });
+    };
+
+    video.addEventListener("loadedmetadata", scheduleMasonryLayout);
+    video.addEventListener("error", () => {
+      let expectedSourceUrl = activeSourceUrl;
+      try {
+        expectedSourceUrl = new URL(activeSourceUrl, window.location.href).href;
+      } catch {
+        expectedSourceUrl = activeSourceUrl;
+      }
+      const currentSourceUrl = video.currentSrc || video.src;
+      if (currentSourceUrl && expectedSourceUrl && currentSourceUrl !== expectedSourceUrl) {
+        return;
+      }
+
+      failedSourceUrls.add(activeSourceUrl);
+      const alternateSourceUrl = getAvailableSourceUrl(activeSourceIndex);
+      if (alternateSourceUrl) {
+        switchSource(
+          activeSourceIndex,
+          pendingPlaybackState || getPlaybackState(),
+          alternateSourceUrl
+        );
+        return;
+      }
+
+      failedSourceIndexes.add(activeSourceIndex);
+      if (qualitySelect?.options[activeSourceIndex]) {
+        qualitySelect.options[activeSourceIndex].disabled = true;
+      }
+      const fallbackSourceIndex = sources.findIndex((source, index) => !failedSourceIndexes.has(index));
+      if (fallbackSourceIndex >= 0) {
+        switchSource(
+          fallbackSourceIndex,
+          pendingPlaybackState || getPlaybackState(),
+          getAvailableSourceUrl(fallbackSourceIndex)
+        );
+        return;
+      }
+
+      showVideoFallback();
+    });
+
+    if (sources.length > 1) {
+      qualitySelect = document.createElement("select");
+      qualitySelect.className = "weibo-grid-reader__video-quality";
+      qualitySelect.setAttribute("aria-label", "选择视频清晰度");
+      sources.forEach((source, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = source.label;
+        qualitySelect.append(option);
+      });
+      qualitySelect.value = String(activeSourceIndex);
+      qualitySelect.addEventListener("click", (event) => event.stopPropagation());
+      qualitySelect.addEventListener("change", () => {
+        const sourceIndex = Number(qualitySelect.value);
+        if (!Number.isInteger(sourceIndex) || sourceIndex === activeSourceIndex) {
+          return;
+        }
+        switchSource(sourceIndex, pendingPlaybackState || getPlaybackState());
+      });
+    }
 
     videoWrap.append(video);
+    if (qualitySelect) {
+      videoWrap.append(qualitySelect);
+    }
     return videoWrap;
   }
 
@@ -2734,41 +2993,41 @@
     return api;
   }
 
-  async function loadDetailComments(status, comments, detailInteractions) {
-    const statusId = getStatusId(status);
-    const requestVersion = Number(comments.dataset.weiboGridLoadVersion || 0) + 1;
-    comments.dataset.weiboGridLoadVersion = String(requestVersion);
-    const result = await bridgeRequest("fetch-comments", { statusId });
-    if (
-      !hasValidExtensionContext()
-      || activeDetailStatusId !== statusId
-      || Number(comments.dataset.weiboGridLoadVersion || 0) !== requestVersion
-    ) {
+  function updateDetailCommentLoadControl(state) {
+    const button = state?.loadMoreButton;
+    if (!button) {
       return;
     }
 
+    button.hidden = !state.hasMore && !state.error;
+    button.disabled = state.loading;
+    button.textContent = state.loading
+      ? "正在加载评论…"
+      : state.error
+        ? "加载失败，点击重试"
+        : "加载更多评论";
+  }
+
+  function renderDetailComments(status, comments, detailInteractions, state) {
     comments.replaceChildren();
-    if (!result.ok || !result.payload.comments.length) {
+    if (!state.comments.length) {
       const empty = document.createElement("p");
       empty.className = "weibo-grid-reader__comment-empty";
-      empty.textContent = result.ok
-        ? "暂时没有可展示的评论"
-        : `评论加载失败：${result.reason || "请在微博原页查看"}`;
+      empty.textContent = state.error || "暂时没有可展示的评论";
       comments.append(empty);
+      updateDetailCommentLoadControl(state);
       repositionActiveDetail();
       return;
     }
 
-    const commentsById = indexComments(result.payload.comments);
+    const commentsById = indexComments(state.comments);
     const renderedCommentIds = new Set();
     const postAuthorId = String(status.user?.idstr || status.user?.id || "");
-    const commentItems = result.payload.comments
+    const commentItems = state.comments
       .map((comment) => createCommentItem(comment, commentsById, renderedCommentIds, postAuthorId))
       .filter(Boolean);
     comments.append(...commentItems);
 
-    // 递归为每一条评论行（顶层 + 嵌套回复）附加悬停整行即可显现的图标簇：
-    // 转发（复用详情顶部的转发框，预填引用文本）/ 评论（展开内联回复输入框）/ 点赞。
     const attachZonesRecursively = (row) => {
       const commentData = row.__weiboGridComment;
       if (commentData) {
@@ -2778,8 +3037,95 @@
       nestedRows.forEach(attachZonesRecursively);
     };
     commentItems.forEach(attachZonesRecursively);
-
+    updateDetailCommentLoadControl(state);
     repositionActiveDetail();
+  }
+
+  async function loadDetailComments(status, comments, detailInteractions, append = false) {
+    const statusId = getStatusId(status);
+    const state = detailCommentStates.get(comments);
+    if (!state || state.loading || (append && !state.hasMore)) {
+      return;
+    }
+
+    const requestVersion = state.requestVersion + 1;
+    const requestedMaxId = append ? state.maxId : "";
+    state.requestVersion = requestVersion;
+    state.loading = true;
+    state.error = "";
+    comments.dataset.weiboGridLoadVersion = String(requestVersion);
+    updateDetailCommentLoadControl(state);
+
+    const result = await bridgeRequest("fetch-comments", {
+      statusId,
+      maxId: requestedMaxId
+    });
+    if (
+      !hasValidExtensionContext()
+      || activeDetailStatusId !== statusId
+      || state.requestVersion !== requestVersion
+    ) {
+      return;
+    }
+
+    state.loading = false;
+    if (!result.ok) {
+      state.error = result.reason || "请在微博原页查看";
+      state.errorOnAppend = append;
+      if (!append) {
+        state.comments = [];
+        state.commentIds.clear();
+        state.maxId = "";
+        state.hasMore = false;
+        renderDetailComments(status, comments, detailInteractions, state);
+      } else {
+        updateDetailCommentLoadControl(state);
+      }
+      return;
+    }
+
+    const incomingComments = Array.isArray(result.payload?.comments)
+      ? result.payload.comments
+      : [];
+    const previousMaxId = append ? state.maxId : "";
+    if (!append) {
+      state.comments = [];
+      state.commentIds.clear();
+      state.maxId = "";
+      state.noProgressCount = 0;
+    }
+
+    let addedCount = 0;
+    for (const comment of incomingComments) {
+      const commentId = getCommentId(comment);
+      if (commentId && state.commentIds.has(commentId)) {
+        continue;
+      }
+      if (commentId) {
+        state.commentIds.add(commentId);
+      }
+      state.comments.push(comment);
+      addedCount += 1;
+    }
+
+    const nextMaxId = String(result.payload?.maxId || "");
+    const cursorAdvanced = Boolean(nextMaxId && nextMaxId !== "0" && nextMaxId !== previousMaxId);
+    state.maxId = nextMaxId;
+    const totalNumber = Number(result.payload?.totalNumber || 0);
+    if (Number.isFinite(totalNumber) && totalNumber > 0) {
+      state.totalNumber = totalNumber;
+    }
+    state.noProgressCount = addedCount ? 0 : state.noProgressCount + 1;
+    const totalReached = state.totalNumber > 0 && state.comments.length >= state.totalNumber;
+    state.hasMore = Boolean(
+      incomingComments.length
+      && cursorAdvanced
+      && state.noProgressCount < 3
+      && !totalReached
+    );
+    state.error = "";
+    state.errorOnAppend = false;
+    renderDetailComments(status, comments, detailInteractions, state);
   }
 
   function closeDetail(restoreHistory = true) {
@@ -2790,6 +3136,8 @@
 
     activeDetailImageFitObserver?.disconnect();
     activeDetailImageFitObserver = null;
+    const commentList = overlay.querySelector(".weibo-grid-reader__comment-list");
+    detailCommentStates.get(commentList)?.loadMoreObserver?.disconnect();
     overlay.remove();
     document.documentElement.classList.remove("weibo-grid-reader-detail-open");
     activeDetailStatusId = "";
@@ -2976,7 +3324,29 @@
     loading.textContent = "正在加载评论…";
     comments.append(loading);
     const detailInteractions = createDetailInteractions(status, heading, comments);
-    commentsSection.append(detailInteractions.interactions, heading, comments);
+    const loadMoreButton = document.createElement("button");
+    loadMoreButton.type = "button";
+    loadMoreButton.className = "weibo-grid-reader__comment-load-more";
+    loadMoreButton.hidden = true;
+    loadMoreButton.addEventListener("click", () => {
+      const state = detailCommentStates.get(comments);
+      const append = state?.error ? state.errorOnAppend : true;
+      void loadDetailComments(status, comments, detailInteractions, append);
+    });
+    detailCommentStates.set(comments, {
+      comments: [],
+      commentIds: new Set(),
+      maxId: "",
+      totalNumber: getNonNegativeCount(status.comments_count),
+      noProgressCount: 0,
+      hasMore: false,
+      loading: false,
+      error: "",
+      errorOnAppend: false,
+      requestVersion: 0,
+      loadMoreButton
+    });
+    commentsSection.append(detailInteractions.interactions, heading, comments, loadMoreButton);
     const side = document.createElement("aside");
     side.className = "weibo-grid-reader__detail-side";
     const sideContent = document.createElement("div");
@@ -3027,6 +3397,19 @@
     }, { capture: true, passive: false });
     document.documentElement.append(overlay);
     document.documentElement.classList.add("weibo-grid-reader-detail-open");
+    const commentState = detailCommentStates.get(comments);
+    if (commentState && typeof IntersectionObserver === "function") {
+      commentState.loadMoreObserver = new IntersectionObserver((entries) => {
+        if (
+          entries.some((entry) => entry.isIntersecting)
+          && commentState.hasMore
+          && !commentState.error
+        ) {
+          void loadDetailComments(status, comments, detailInteractions, true);
+        }
+      }, { root: sideContent, rootMargin: "180px 0px" });
+      commentState.loadMoreObserver.observe(loadMoreButton);
+    }
     window.requestAnimationFrame(() => {
       window.scrollTo(scrollPosition.left, scrollPosition.top);
       positionDetailDialog(dialog);

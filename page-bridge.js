@@ -406,11 +406,17 @@
     }
   }
 
-  async function fetchComments(statusId) {
+  async function fetchComments(statusId, maxId = "") {
     const endpoint = new URL("/ajax/statuses/buildComments", window.location.origin);
     endpoint.searchParams.set("id", String(statusId));
-    endpoint.searchParams.set("is_reload", "1");
+    endpoint.searchParams.set("flow", "0");
+    if (!maxId) {
+      endpoint.searchParams.set("is_reload", "1");
+    }
+    endpoint.searchParams.set("is_mix", "0");
     endpoint.searchParams.set("count", "20");
+    endpoint.searchParams.set("max_id", String(maxId || "0"));
+    endpoint.searchParams.set("max_id_type", "0");
     endpoint.searchParams.set("is_show_bulletin", "2");
     endpoint.searchParams.set("fetch_level", "0");
     endpoint.searchParams.set("locale", "zh-CN");
@@ -425,8 +431,35 @@
       }
 
       const payload = await response.json();
-      const comments = payload.data || payload.comments || [];
-      return { ok: true, payload: { comments: Array.isArray(comments) ? comments : [] } };
+      const data = payload.data;
+      const comments = Array.isArray(data)
+        ? data
+        : data?.data || data?.comments || payload.comments || [];
+      const lastComment = Array.isArray(comments) ? comments[comments.length - 1] : null;
+      const explicitMaxId = payload.max_id
+        ?? payload.max_id_str
+        ?? data?.max_id
+        ?? data?.max_id_str
+        ?? payload.next_cursor
+        ?? data?.next_cursor;
+      const nextMaxId = explicitMaxId ?? (
+        comments.length >= 20
+          ? lastComment?.idstr || lastComment?.id || ""
+          : ""
+      );
+      const totalNumber = payload.total_number
+        ?? payload.total
+        ?? data?.total_number
+        ?? data?.total
+        ?? 0;
+      return {
+        ok: true,
+        payload: {
+          comments: Array.isArray(comments) ? comments : [],
+          maxId: nextMaxId,
+          totalNumber
+        }
+      };
     } catch (error) {
       return {
         ok: false,
@@ -610,7 +643,7 @@
     }
 
     if (message.type === "fetch-comments") {
-      void fetchComments(message.statusId).then((result) => {
+      void fetchComments(message.statusId, message.maxId).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }
