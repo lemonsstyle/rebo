@@ -24,7 +24,8 @@
     smooth: { key: "smooth", label: "流畅", rank: 1 },
     automatic: { key: "automatic", label: "自动", rank: 0 }
   });
-  const DETAIL_IMAGE_NEAR_FIT_THRESHOLD = 0.12;
+  const DETAIL_IMAGE_PREVIEW_MAX_SCALE = 4;
+  const DETAIL_IMAGE_PREVIEW_ZOOM_STEP = 0.25;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
   // 评论行的转发/评论/点赞图标簇固定挂在该评论自己的头部一行（与昵称同一行，
@@ -152,7 +153,7 @@
   let masonryEpoch = 0;
   let activeDetailStatusId = "";
   let activeDetailAnchor = null;
-  let activeDetailImageFitObserver = null;
+  let activeDetailImagePreviewController = null;
   let detailHistoryPushed = false;
   let lastUrl = window.location.href;
   const readerSeenIds = new Set();
@@ -1534,50 +1535,272 @@
     }, 60);
   }
 
-  function closeCommentImagePreview() {
-    getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer")?.remove();
-  }
-
-  function openCommentImagePreview(imageSources) {
-    const dialog = getDetailOverlay()?.querySelector(".weibo-grid-reader__detail-dialog");
-    if (!dialog) {
+  function closeDetailImagePreview(restoreFocus = true) {
+    const controller = activeDetailImagePreviewController;
+    const layer = controller?.layer
+      || getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer");
+    if (!layer) {
       return;
     }
 
-    closeCommentImagePreview();
+    activeDetailImagePreviewController = null;
+    controller?.destroy?.();
+    layer.remove();
+    if (restoreFocus && controller?.returnFocus instanceof HTMLElement && controller.returnFocus.isConnected) {
+      controller.returnFocus.focus({ preventScroll: true });
+    }
+  }
+
+  function openDetailImagePreview(
+    imageSources,
+    {
+      label = "图片放大查看",
+      alt = "图片",
+      failureText = "图片暂时无法显示",
+      referrerPolicy = ""
+    } = {}
+  ) {
+    const overlay = getDetailOverlay();
+    if (!overlay?.querySelector(".weibo-grid-reader__detail-dialog")) {
+      return;
+    }
+
+    const returnFocus = document.activeElement;
+    closeDetailImagePreview(false);
     const layer = document.createElement("section");
     layer.className = "weibo-grid-reader__comment-image-preview-layer";
-    layer.setAttribute("aria-label", "评论图片预览");
+    layer.setAttribute("role", "dialog");
+    layer.setAttribute("aria-modal", "true");
+    layer.setAttribute("aria-label", label);
+    layer.tabIndex = -1;
+    const viewport = document.createElement("div");
+    viewport.className = "weibo-grid-reader__image-preview-viewport";
+    const stage = document.createElement("div");
+    stage.className = "weibo-grid-reader__image-preview-stage";
     const close = document.createElement("button");
     close.type = "button";
     close.className = "weibo-grid-reader__comment-image-preview-close";
     close.setAttribute("aria-label", "关闭图片预览");
     close.textContent = "×";
-    close.addEventListener("click", closeCommentImagePreview);
+    close.addEventListener("click", () => closeDetailImagePreview());
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "weibo-grid-reader__image-preview-toolbar";
+    toolbar.setAttribute("role", "toolbar");
+    toolbar.setAttribute("aria-label", "图片缩放工具");
+    const createToolbarButton = (text, ariaLabel, title = ariaLabel) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "weibo-grid-reader__image-preview-control";
+      button.textContent = text;
+      button.setAttribute("aria-label", ariaLabel);
+      button.title = title;
+      return button;
+    };
+    const zoomOut = createToolbarButton("−", "缩小图片");
+    const zoomStatus = document.createElement("output");
+    zoomStatus.className = "weibo-grid-reader__image-preview-scale";
+    zoomStatus.setAttribute("aria-live", "polite");
+    zoomStatus.textContent = "加载中…";
+    const zoomIn = createToolbarButton("+", "放大图片");
+    const fit = createToolbarButton("适应", "完整显示图片", "恢复为适应窗口");
+    const actualSize = createToolbarButton("1:1", "按原始像素查看", "按原始像素查看（最高 400%）");
+    toolbar.append(zoomOut, zoomStatus, zoomIn, fit, actualSize);
+    zoomOut.disabled = true;
+    zoomIn.disabled = true;
+    fit.disabled = true;
+    actualSize.disabled = true;
+
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__comment-image-preview-full";
-    image.alt = "评论图片";
-    image.referrerPolicy = "unsafe-url";
+    image.alt = alt;
+    image.draggable = false;
+    if (referrerPolicy) {
+      image.referrerPolicy = referrerPolicy;
+    }
     let sourceIndex = 0;
+    let scale = 1;
+    let fitRatio = 1;
+    let panX = 0;
+    let panY = 0;
+    let activePointerId = null;
+    let pointerX = 0;
+    let pointerY = 0;
+    let resizeObserver = null;
+
+    const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
+    const getPanBounds = () => ({
+      x: Math.max(0, ((image.clientWidth * scale) - viewport.clientWidth) / 2),
+      y: Math.max(0, ((image.clientHeight * scale) - viewport.clientHeight) / 2)
+    });
+    const updatePreview = () => {
+      const bounds = getPanBounds();
+      panX = clamp(panX, -bounds.x, bounds.x);
+      panY = clamp(panY, -bounds.y, bounds.y);
+      image.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
+      const isZoomed = scale > 1.001;
+      layer.classList.toggle("weibo-grid-reader__comment-image-preview-layer--zoomed", isZoomed);
+      zoomStatus.textContent = isZoomed ? `${Math.round(scale * 100)}%` : "适应窗口";
+      zoomOut.disabled = !isZoomed;
+      fit.disabled = !isZoomed;
+      zoomIn.disabled = scale >= DETAIL_IMAGE_PREVIEW_MAX_SCALE - 0.001;
+      const naturalScale = fitRatio > 0 ? 1 / fitRatio : 1;
+      actualSize.disabled = naturalScale <= 1.001;
+    };
+    const layoutFittedImage = () => {
+      if (!image.naturalWidth || !image.naturalHeight || !viewport.clientWidth || !viewport.clientHeight) {
+        return;
+      }
+      fitRatio = Math.min(
+        viewport.clientWidth / image.naturalWidth,
+        viewport.clientHeight / image.naturalHeight
+      );
+      image.style.width = `${Math.max(1, image.naturalWidth * fitRatio)}px`;
+      image.style.height = `${Math.max(1, image.naturalHeight * fitRatio)}px`;
+      updatePreview();
+    };
+    const setScale = (nextScale, clientX = null, clientY = null) => {
+      const previousScale = scale;
+      scale = clamp(nextScale, 1, DETAIL_IMAGE_PREVIEW_MAX_SCALE);
+      if (scale <= 1.001) {
+        scale = 1;
+        panX = 0;
+        panY = 0;
+      } else if (previousScale > 0) {
+        const viewportRect = viewport.getBoundingClientRect();
+        const centerX = viewportRect.left + viewportRect.width / 2;
+        const centerY = viewportRect.top + viewportRect.height / 2;
+        const offsetX = (clientX ?? centerX) - centerX;
+        const offsetY = (clientY ?? centerY) - centerY;
+        const scaleChange = scale / previousScale;
+        panX = offsetX - ((offsetX - panX) * scaleChange);
+        panY = offsetY - ((offsetY - panY) * scaleChange);
+      }
+      updatePreview();
+    };
+    const endDrag = (event = null) => {
+      if (activePointerId === null) {
+        return;
+      }
+      if (event && image.hasPointerCapture?.(activePointerId)) {
+        image.releasePointerCapture(activePointerId);
+      }
+      activePointerId = null;
+      layer.classList.remove("weibo-grid-reader__comment-image-preview-layer--dragging");
+    };
     const loadSource = () => {
       image.src = imageSources[sourceIndex] || "";
     };
+    image.addEventListener("load", () => {
+      scale = 1;
+      panX = 0;
+      panY = 0;
+      layer.classList.add("weibo-grid-reader__comment-image-preview-layer--loaded");
+      layoutFittedImage();
+    });
     image.addEventListener("error", () => {
       sourceIndex += 1;
       if (sourceIndex < imageSources.length) {
         loadSource();
         return;
       }
-      image.replaceWith(document.createTextNode("评论图片暂时无法显示"));
+      const failure = document.createElement("p");
+      failure.className = "weibo-grid-reader__image-preview-error";
+      failure.textContent = failureText;
+      image.replaceWith(failure);
+      toolbar.hidden = true;
     });
-    loadSource();
-    layer.append(close, image);
-    layer.addEventListener("click", (event) => {
-      if (event.target === layer) {
-        closeCommentImagePreview();
+
+    zoomOut.addEventListener("click", () => setScale(scale - DETAIL_IMAGE_PREVIEW_ZOOM_STEP));
+    zoomIn.addEventListener("click", () => setScale(scale + DETAIL_IMAGE_PREVIEW_ZOOM_STEP));
+    fit.addEventListener("click", () => setScale(1));
+    actualSize.addEventListener("click", () => {
+      setScale(clamp(1 / fitRatio, 1, DETAIL_IMAGE_PREVIEW_MAX_SCALE));
+    });
+    image.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setScale(scale > 1.001 ? 1 : 2, event.clientX, event.clientY);
+    });
+    image.addEventListener("pointerdown", (event) => {
+      if (scale <= 1.001 || event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      activePointerId = event.pointerId;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      image.setPointerCapture(event.pointerId);
+      layer.classList.add("weibo-grid-reader__comment-image-preview-layer--dragging");
+    });
+    image.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== activePointerId) {
+        return;
+      }
+      panX += event.clientX - pointerX;
+      panY += event.clientY - pointerY;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      updatePreview();
+    });
+    image.addEventListener("pointerup", endDrag);
+    image.addEventListener("pointercancel", endDrag);
+    image.addEventListener("lostpointercapture", endDrag);
+    layer.addEventListener("wheel", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      if (!origin?.closest(".weibo-grid-reader__image-preview-viewport")) {
+        return;
+      }
+      event.preventDefault();
+      const zoomFactor = Math.exp(-event.deltaY * 0.0015);
+      setScale(scale * zoomFactor, event.clientX, event.clientY);
+    }, { passive: false });
+    layer.addEventListener("keydown", (event) => {
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setScale(scale + DETAIL_IMAGE_PREVIEW_ZOOM_STEP);
+      } else if (event.key === "-") {
+        event.preventDefault();
+        setScale(scale - DETAIL_IMAGE_PREVIEW_ZOOM_STEP);
+      } else if (event.key === "0") {
+        event.preventDefault();
+        setScale(1);
+      } else if (event.key === "Tab") {
+        const controls = [zoomOut, zoomIn, fit, actualSize, close].filter((control) => !control.disabled && !control.hidden);
+        const currentIndex = controls.indexOf(document.activeElement);
+        if (event.shiftKey && currentIndex <= 0) {
+          event.preventDefault();
+          controls.at(-1)?.focus();
+        } else if (!event.shiftKey && currentIndex === controls.length - 1) {
+          event.preventDefault();
+          controls[0]?.focus();
+        }
       }
     });
-    dialog.append(layer);
+
+    stage.append(image);
+    viewport.append(stage);
+    layer.append(viewport, toolbar, close);
+    layer.addEventListener("click", (event) => {
+      if (event.target === layer || event.target === viewport || event.target === stage) {
+        closeDetailImagePreview();
+      }
+    });
+    overlay.append(layer);
+    if (typeof ResizeObserver === "function") {
+      resizeObserver = new ResizeObserver(layoutFittedImage);
+      resizeObserver.observe(viewport);
+    }
+    activeDetailImagePreviewController = {
+      layer,
+      returnFocus,
+      destroy: () => {
+        resizeObserver?.disconnect();
+        endDrag();
+      }
+    };
+    loadSource();
+    close.focus({ preventScroll: true });
   }
 
   function createCommentImagePreview(url, comment) {
@@ -1589,7 +1812,12 @@
     button.setAttribute("aria-label", "预览评论图片");
     const imageSources = getCommentImageSources(comment, url);
     let sourceIndex = 0;
-    button.addEventListener("click", () => openCommentImagePreview(imageSources.slice(sourceIndex)));
+    button.addEventListener("click", () => openDetailImagePreview(imageSources.slice(sourceIndex), {
+      label: "评论图片放大查看",
+      alt: "评论图片",
+      failureText: "评论图片暂时无法显示",
+      referrerPolicy: "unsafe-url"
+    }));
     const image = document.createElement("img");
     image.alt = "评论图片";
     image.loading = "lazy";
@@ -2272,89 +2500,47 @@
     const viewer = document.createElement("div");
     viewer.className = "weibo-grid-reader__detail-image-viewer";
     viewer.tabIndex = 0;
-    viewer.setAttribute("aria-label", "图片浏览区域");
+    viewer.setAttribute("role", "button");
+    viewer.setAttribute("aria-label", "图片浏览区域，点击放大查看");
+    viewer.title = "点击放大查看";
 
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__detail-full-image";
     image.alt = alt;
-    let imageReady = false;
-    let fitFrame = 0;
-
-    const updateFitMode = () => {
-      fitFrame = 0;
-      if (!imageReady || !viewer.isConnected || !viewer.clientWidth || !viewer.clientHeight) {
-        return;
-      }
-
-      viewer.classList.remove("weibo-grid-reader__detail-image-viewer--contained");
-      const isLandscape = viewer.classList.contains("weibo-grid-reader__detail-image-viewer--landscape");
-      const viewportSize = isLandscape ? viewer.clientWidth : viewer.clientHeight;
-      const overflowSize = isLandscape
-        ? Math.max(0, viewer.scrollWidth - viewer.clientWidth)
-        : Math.max(0, viewer.scrollHeight - viewer.clientHeight);
-      const fitsNearly = overflowSize <= viewportSize * DETAIL_IMAGE_NEAR_FIT_THRESHOLD;
-
-      viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--contained", fitsNearly);
-      if (fitsNearly) {
-        viewer.scrollLeft = 0;
-        viewer.scrollTop = 0;
-      }
-      repositionActiveDetail();
-    };
-
-    const scheduleFitMode = () => {
-      if (fitFrame) {
-        window.cancelAnimationFrame(fitFrame);
-      }
-      fitFrame = window.requestAnimationFrame(updateFitMode);
-    };
 
     image.addEventListener("load", () => {
-      const isPortrait = image.naturalHeight > image.naturalWidth;
-      viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--portrait", isPortrait);
-      viewer.classList.toggle("weibo-grid-reader__detail-image-viewer--landscape", !isPortrait);
-      viewer.scrollLeft = 0;
-      viewer.scrollTop = 0;
-      imageReady = true;
-      scheduleFitMode();
+      repositionActiveDetail();
     });
     image.addEventListener("error", () => {
-      imageReady = false;
-      viewer.classList.remove("weibo-grid-reader__detail-image-viewer--contained");
       image.alt = "图片加载失败";
       image.removeAttribute("src");
     }, { once: true });
-    viewer.addEventListener("wheel", (event) => {
-      if (event.defaultPrevented) {
+    const openPreview = () => {
+      const source = image.currentSrc || image.src;
+      if (!source) {
         return;
       }
-      if (!viewer.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
-        return;
+      openDetailImagePreview([source], {
+        label: "微博图片放大查看",
+        alt: image.alt || alt,
+        failureText: "图片暂时无法显示"
+      });
+    };
+    viewer.addEventListener("click", (event) => {
+      if (event.target === image) {
+        viewer.focus({ preventScroll: true });
+        openPreview();
       }
-
-      const distance = event.deltaX || event.deltaY;
-      if (!distance) {
-        return;
+    });
+    viewer.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openPreview();
       }
-
-      event.preventDefault();
-      viewer.scrollLeft += distance;
-    }, { passive: false });
+    });
     viewer.append(image);
 
-    activeDetailImageFitObserver?.disconnect();
-    activeDetailImageFitObserver = new ResizeObserver(scheduleFitMode);
-    activeDetailImageFitObserver.observe(viewer);
-
     const setImage = (url, nextAlt = alt) => {
-      viewer.classList.remove(
-        "weibo-grid-reader__detail-image-viewer--portrait",
-        "weibo-grid-reader__detail-image-viewer--landscape",
-        "weibo-grid-reader__detail-image-viewer--contained"
-      );
-      viewer.scrollLeft = 0;
-      viewer.scrollTop = 0;
-      imageReady = false;
       image.alt = nextAlt;
       image.src = url;
     };
@@ -3414,8 +3600,7 @@
       return;
     }
 
-    activeDetailImageFitObserver?.disconnect();
-    activeDetailImageFitObserver = null;
+    closeDetailImagePreview(false);
     const commentList = overlay.querySelector(".weibo-grid-reader__comment-list");
     detailCommentStates.get(commentList)?.loadMoreObserver?.disconnect();
     overlay.remove();
@@ -3458,19 +3643,6 @@
     }
   }
 
-  function isImageViewerReadyForScroll(viewer, detailMain) {
-    if (!detailMain) {
-      return true;
-    }
-
-    const viewerRect = viewer.getBoundingClientRect();
-    const mainRect = detailMain.getBoundingClientRect();
-    const fullyVisible = viewerRect.top >= mainRect.top && viewerRect.bottom <= mainRect.bottom;
-    const viewerIsTallerThanMain = viewerRect.height > detailMain.clientHeight;
-    const mainIsAtEnd = detailMain.scrollTop + detailMain.clientHeight >= detailMain.scrollHeight - 1;
-    return fullyVisible || (viewerIsTallerThanMain && mainIsAtEnd);
-  }
-
   function canScrollVertically(element, distance) {
     if (!element || !distance || element.scrollHeight <= element.clientHeight) {
       return false;
@@ -3481,22 +3653,17 @@
       : element.scrollTop > 0;
   }
 
-  function canScrollHorizontally(element, distance) {
-    if (!element || !distance || element.scrollWidth <= element.clientWidth) {
-      return false;
-    }
-
-    return distance > 0
-      ? element.scrollLeft + element.clientWidth < element.scrollWidth - 1
-      : element.scrollLeft > 0;
-  }
-
   function handleDetailWheel(event, dialog) {
     if (event.defaultPrevented) {
       return;
     }
 
     const origin = event.target instanceof Element ? event.target : null;
+    if (origin?.closest(".weibo-grid-reader__comment-image-preview-layer")) {
+      event.preventDefault();
+      return;
+    }
+
     const emojiPanel = origin?.closest(".weibo-grid-reader__comment-emoji-panel");
     if (emojiPanel && dialog.contains(emojiPanel)) {
       const emojiGrid = emojiPanel.querySelector(".weibo-grid-reader__comment-emoji-grid");
@@ -3535,26 +3702,6 @@
 
     if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer")) {
       const detailMain = scrollTarget.closest(".weibo-grid-reader__detail-main");
-      if (!isImageViewerReadyForScroll(scrollTarget, detailMain)) {
-        detailMain?.scrollBy({ top: event.deltaY, left: event.deltaX });
-        return;
-      }
-
-      if (scrollTarget.classList.contains("weibo-grid-reader__detail-image-viewer--landscape")) {
-        const horizontalDistance = event.deltaX || event.deltaY;
-        if (canScrollHorizontally(scrollTarget, horizontalDistance)) {
-          scrollTarget.scrollLeft += horizontalDistance;
-          return;
-        }
-        detailMain?.scrollBy({ top: event.deltaY, left: event.deltaX });
-        return;
-      }
-
-      if (canScrollVertically(scrollTarget, event.deltaY)) {
-        scrollTarget.scrollTop += event.deltaY;
-        return;
-      }
-
       scrollTarget = detailMain || scrollTarget;
     }
 
@@ -4170,6 +4317,11 @@
     });
     window.addEventListener("hashchange", refreshPage);
     window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer")) {
+        closeDetailImagePreview();
+        return;
+      }
+
       if (event.key === "Escape" && activeDetailStatusId) {
         closeDetail(true);
         return;
