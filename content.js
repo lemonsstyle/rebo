@@ -3747,9 +3747,7 @@
 
     root.querySelector("[data-reader-toggle]")?.addEventListener("change", (event) => {
       settings.readerEnabled = event.currentTarget.checked;
-      if (settings.readerEnabled) {
-        setDrawerOpen(false);
-      }
+      setDrawerOpen(false);
       saveSettings();
       refreshPage();
     });
