@@ -32,6 +32,90 @@
   // 延迟只用于防止鼠标划过列表时图标到处闪烁，因此取一个几乎无感知的短值，
   // 而不是像早期版本那样用 1 秒等待去"验证用户是否真的想操作"。
   const COMMENT_ACTIONS_REVEAL_DELAY_MS = 120;
+  // 微博网页版的表情面板会把选中的表情作为 `[名称]` 文本插入评论输入框，
+  // /ajax/comments/create 与 /ajax/comments/reply 仍沿用原来的 comment 字段。
+  // 这里使用当前官方“PC 热门表情”中的常用项和同一套静态资源，避免新增接口、
+  // 权限或第三方依赖；即使图片资源暂时不可用，按钮仍会回退为表情名称。
+  const COMMENT_EMOJIS = Object.freeze([
+    ["微笑", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/f4/201810_hehe_mobile.png"],
+    ["可爱", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/78/201810_keai_mobile.png"],
+    ["太开心", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/a6/201810_taikaixin_mobile.png"],
+    ["鼓掌", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/32/201810_guzhang_mobile.png"],
+    ["嘻嘻", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8e/201810_xixi_mobile.png"],
+    ["哈哈", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/c5/201810_haha_mobile.png"],
+    ["笑cry", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/f1/201810_xiaoku_mobile.png"],
+    ["挤眼", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/dd/201810_jiyan_mobile.png"],
+    ["馋嘴", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/e9/201810_chanzui_mobile.png"],
+    ["黑线", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/2e/201810_heixian_mobile.png"],
+    ["汗", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/4b/201810_han_mobile.png"],
+    ["挖鼻", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/4d/201810_wabishi_mobile.png"],
+    ["哼", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/5b/201810_heng_mobile.png"],
+    ["怒", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/90/201810_nu_mobile.png"],
+    ["委屈", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8b/201810_weiqu_mobile.png"],
+    ["可怜", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/44/201810_kelian_mobile.png"],
+    ["失望", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/3d/201810_shiwang_mobile.png"],
+    ["悲伤", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/49/201810_beishang_mobile.png"],
+    ["泪", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/87/201810_lei_mobile.png"],
+    ["允悲", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/65/201810_ybnew_mobile.png"],
+    ["苦涩", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/5f/2021_bitter_mobile.png"],
+    ["害羞", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/c1/201810_haixiu_mobile.png"],
+    ["爱你", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/db/201810_aini_mobile.png"],
+    ["亲亲", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8f/201810_qinqin_mobile.png"],
+    ["抱一抱", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/84/2020_hug_mobile.png"],
+    ["色", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/23/201810_huaxin_mobile.png"],
+    ["舔屏", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/da/201810_tian_mobile.png"],
+    ["憧憬", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/77/201810_xingxingyan_mobile.png"],
+    ["哇", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/79/2022_wow_mobile.png"],
+    ["坏笑", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/63/201810_huaixiao_mobile.png"],
+    ["阴险", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/a5/201810_yinxian_mobile.png"],
+    ["笑而不语", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/24/201810_heiheihei_mobile.png"],
+    ["偷笑", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/df/201810_touxiao_mobile.png"],
+    ["666", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/b9/2022_666_mobile.png"],
+    ["酷", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/af/201810_ku_mobile.png"],
+    ["并不简单", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/ce/201810_bingbujiandan_mobile.png"],
+    ["思考", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/9e/201810_sikao_mobile.png"],
+    ["疑问", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/09/201810_yiwen_mobile.png"],
+    ["费解", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/dd/201810_feijie_mobile.png"],
+    ["晕", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/94/201810_yun_mobile.png"],
+    ["衰", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/0a/201810_shuai_mobile.png"],
+    ["骷髅", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/94/201810_kulou_mobile.png"],
+    ["嘘", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/35/201810_xu_mobile.png"],
+    ["闭嘴", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/05/201810_bizui_mobile.png"],
+    ["傻眼", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/9a/201810_shayan_mobile.png"],
+    ["感冒", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/5d/2022_cold_mobile.png"],
+    ["吃惊", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/00/201810_chijing_mobile.png"],
+    ["裂开", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/6d/202011_liekai_mobile.png"],
+    ["生病", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/7c/201810_shengbing_mobile.png"],
+    ["吐", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/4f/201810_tu_mobile.png"],
+    ["拜拜", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8d/201810_baibai_mobile.png"],
+    ["鄙视", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/71/201810_bishi_mobile.png"],
+    ["白眼", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/a0/201810_landelini_mobile.png"],
+    ["抓狂", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/02/201810_zhuakuang_mobile.png"],
+    ["怒骂", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/d4/201810_numa_mobile.png"],
+    ["打脸", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/c6/201810_dalian_mobile.png"],
+    ["努力", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/0d/2022_Keepgoing_mobile.png"],
+    ["顶", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/80/201810_ding_mobile.png"],
+    ["钱", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/91/201810_qian_mobile.png"],
+    ["哈欠", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/1c/201810_dahaqi_mobile.png"],
+    ["困", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/cb/201810_kun_mobile.png"],
+    ["求饶", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/ec/moren_qiurao_mobile.png"],
+    ["睡", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/aa/201810_shuijiao_mobile.png"],
+    ["吃瓜", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/0b/201810_chigua_mobile.png"],
+    ["打call", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/2a/moren_dacall_mobile.png"],
+    ["彩虹屁", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/c0/2022_praise_mobile.png"],
+    ["送花花", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/0b/2022_Flowers_mobile.png"],
+    ["比耶", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/49/2023_yeahyeah_mobile.png"],
+    ["打工人", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/0b/2023_earner_mobile.png"],
+    ["干饭人", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/3c/2022_Foodie_mobile.png"],
+    ["融化", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/03/2022_melt_mobile.png"],
+    ["揣手", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/7f/2022_chuaishou_mobile.png"],
+    ["举手", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/3f/2022_raisehand_mobile.png"],
+    ["抱抱", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8b/201810_baobao_mobile.png"],
+    ["摊手", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/07/201810_tanshou_mobile.png"],
+    ["跪了", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/2f/201810_guile_mobile.png"],
+    ["收到", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/19/2022_get_mobile.png"],
+    ["你好", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8e/2023_hello_mobile.png"]
+  ].map(([name, src]) => Object.freeze({ name, src })));
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -78,6 +162,14 @@
   const pendingLongTextRequests = new Map();
   const pendingBridgeRequests = new Map();
   let sentinelObserver = null;
+
+  document.addEventListener("click", (event) => {
+    for (const picker of document.querySelectorAll(".weibo-grid-reader__comment-emoji-picker[data-open='true']")) {
+      if (!picker.contains(event.target)) {
+        setCommentEmojiPickerOpen(picker, false);
+      }
+    }
+  });
 
   function hasValidExtensionContext() {
     try {
@@ -2472,6 +2564,141 @@
     return author ? `//@${author}: ${text}` : text;
   }
 
+  function insertCommentEmoji(textarea, emojiName) {
+    const token = `[${emojiName}]`;
+    const start = Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
+    const end = Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+    const maxLength = textarea.maxLength > 0 ? textarea.maxLength : Number.POSITIVE_INFINITY;
+    const availableLength = maxLength - (textarea.value.length - (end - start));
+    if (token.length > availableLength) {
+      return false;
+    }
+
+    textarea.setRangeText(token, start, end, "end");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.focus();
+    return true;
+  }
+
+  function positionCommentEmojiPanel(panel, trigger) {
+    const viewportPadding = 12;
+    const panelGap = 6;
+    const triggerRect = trigger.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - panelRect.width - viewportPadding);
+    const left = Math.min(Math.max(viewportPadding, triggerRect.left), maxLeft);
+    const preferredTop = triggerRect.bottom + panelGap;
+    const top = preferredTop + panelRect.height <= window.innerHeight - viewportPadding
+      ? preferredTop
+      : Math.max(viewportPadding, triggerRect.top - panelRect.height - panelGap);
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+  }
+
+  function setCommentEmojiPickerOpen(picker, open) {
+    const panel = picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-panel");
+    const trigger = picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-trigger");
+    if (!panel || !trigger) {
+      return;
+    }
+    picker.dataset.open = String(open);
+    panel.hidden = !open;
+    trigger.setAttribute("aria-expanded", String(open));
+    if (open) {
+      positionCommentEmojiPanel(panel, trigger);
+    }
+  }
+
+  function repositionOpenCommentEmojiPickers() {
+    for (const picker of document.querySelectorAll(".weibo-grid-reader__comment-emoji-picker[data-open='true']")) {
+      const panel = picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-panel");
+      const trigger = picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-trigger");
+      if (panel && trigger) {
+        positionCommentEmojiPanel(panel, trigger);
+      }
+    }
+  }
+
+  function createCommentEmojiPicker(textarea) {
+    const picker = document.createElement("div");
+    picker.className = "weibo-grid-reader__comment-emoji-picker";
+    picker.dataset.open = "false";
+
+    const summary = document.createElement("button");
+    summary.type = "button";
+    summary.className = "weibo-grid-reader__comment-emoji-trigger";
+    summary.setAttribute("aria-label", "添加表情");
+    summary.setAttribute("aria-expanded", "false");
+    summary.title = "添加表情";
+    const summaryIcon = document.createElement("span");
+    summaryIcon.setAttribute("aria-hidden", "true");
+    summaryIcon.textContent = "☺";
+    const summaryLabel = document.createElement("span");
+    summaryLabel.textContent = "表情";
+    summary.append(summaryIcon, summaryLabel);
+
+    const panel = document.createElement("div");
+    panel.className = "weibo-grid-reader__comment-emoji-panel";
+    panel.hidden = true;
+    panel.setAttribute("role", "group");
+    panel.setAttribute("aria-label", "微博常用表情");
+    const panelHeading = document.createElement("strong");
+    panelHeading.className = "weibo-grid-reader__comment-emoji-heading";
+    panelHeading.textContent = "常用表情";
+    const grid = document.createElement("div");
+    grid.className = "weibo-grid-reader__comment-emoji-grid";
+    const status = document.createElement("span");
+    status.className = "weibo-grid-reader__comment-emoji-status";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+
+    for (const emoji of COMMENT_EMOJIS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "weibo-grid-reader__comment-emoji-option";
+      button.setAttribute("aria-label", `[${emoji.name}]`);
+      button.title = `[${emoji.name}]`;
+      const image = document.createElement("img");
+      image.alt = "";
+      image.decoding = "async";
+      image.loading = "lazy";
+      image.referrerPolicy = "origin";
+      image.src = emoji.src;
+      image.addEventListener("error", () => {
+        button.classList.add("weibo-grid-reader__comment-emoji-option--fallback");
+        button.textContent = emoji.name;
+      }, { once: true });
+      button.append(image);
+      button.addEventListener("click", () => {
+        if (insertCommentEmoji(textarea, emoji.name)) {
+          status.textContent = `已添加[${emoji.name}]`;
+        } else {
+          status.textContent = `字数已满，无法添加[${emoji.name}]`;
+        }
+      });
+      grid.append(button);
+    }
+
+    panel.append(panelHeading, grid, status);
+    picker.append(summary, panel);
+    summary.addEventListener("click", () => {
+      const open = picker.dataset.open !== "true";
+      for (const otherPicker of document.querySelectorAll(".weibo-grid-reader__comment-emoji-picker[data-open='true']")) {
+        if (otherPicker !== picker) {
+          setCommentEmojiPickerOpen(otherPicker, false);
+        }
+      }
+      setCommentEmojiPickerOpen(picker, open);
+    });
+    picker.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setCommentEmojiPickerOpen(picker, false);
+        summary.focus();
+      }
+    });
+    return picker;
+  }
+
   // 评论下的内联回复框：紧跟在该评论行后面展开，提交后追加一条新回复评论
   // （官方接口猜测为 /ajax/comments/create 加 cid 参数，见 page-bridge.js
   // createCommentReply 的说明）。提交成功后整体刷新评论列表，保证嵌套结构、
@@ -2488,24 +2715,36 @@
     textarea.maxLength = 140;
     textarea.placeholder = `回复 @${comment.user?.screen_name || "微博用户"}`;
 
+    const emojiPicker = createCommentEmojiPicker(textarea);
+
     const footer = document.createElement("div");
     footer.className = "weibo-grid-reader__comment-inline-reply-footer";
     const feedback = document.createElement("span");
     feedback.className = "weibo-grid-reader__comment-inline-reply-feedback";
     feedback.setAttribute("role", "status");
     feedback.setAttribute("aria-live", "polite");
+    const count = document.createElement("span");
+    count.className = "weibo-grid-reader__comment-inline-reply-count";
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.textContent = "取消";
     const submit = document.createElement("button");
     submit.type = "submit";
     submit.textContent = "回复";
-    footer.append(feedback, cancel, submit);
-    form.append(textarea, footer);
+    footer.append(feedback, count, cancel, submit);
+    form.append(textarea, emojiPicker, footer);
 
     let pending = false;
+    const updateReplyComposer = () => {
+      count.textContent = `${textarea.value.length}/140`;
+      submit.disabled = pending || !textarea.value.trim();
+      if (pending) {
+        setCommentEmojiPickerOpen(emojiPicker, false);
+      }
+    };
     cancel.addEventListener("click", () => onDone());
     form.addEventListener("click", (event) => event.stopPropagation());
+    textarea.addEventListener("input", updateReplyComposer);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = textarea.value.trim();
@@ -2515,18 +2754,18 @@
 
       pending = true;
       textarea.disabled = true;
-      submit.disabled = true;
       cancel.disabled = true;
       feedback.textContent = "正在回复…";
+      updateReplyComposer();
 
       const result = await bridgeRequest("create-comment-reply", { statusId, parentCommentId: commentId, text });
       pending = false;
 
       if (!result.ok) {
         textarea.disabled = false;
-        submit.disabled = false;
         cancel.disabled = false;
         feedback.textContent = `回复失败：${result.reason || "请稍后重试"}`;
+        updateReplyComposer();
         return;
       }
 
@@ -2536,6 +2775,7 @@
       onDone();
     });
 
+    updateReplyComposer();
     window.requestAnimationFrame(() => textarea.focus());
     return form;
   }
@@ -2828,6 +3068,7 @@
     textarea.name = "comment";
     textarea.rows = 3;
     textarea.maxLength = 140;
+    const emojiPicker = createCommentEmojiPicker(textarea);
     const formFooter = document.createElement("div");
     formFooter.className = "weibo-grid-reader__comment-form-footer";
     const count = document.createElement("span");
@@ -2840,7 +3081,7 @@
     submit.type = "submit";
     submit.className = "weibo-grid-reader__comment-submit";
     formFooter.append(count, cancel, submit);
-    commentForm.append(textarea, formFooter);
+    commentForm.append(textarea, emojiPicker, formFooter);
 
     let attitudePending = false;
     let composerPending = false;
@@ -2875,6 +3116,9 @@
       textarea.disabled = composerPending;
       cancel.disabled = composerPending;
       count.textContent = `${textarea.value.length}/140`;
+      if (!hasActiveComposer || composerPending) {
+        setCommentEmojiPickerOpen(emojiPicker, false);
+      }
 
       if (!hasActiveComposer) {
         return;
@@ -3210,6 +3454,7 @@
     const dialog = getDetailOverlay()?.querySelector(".weibo-grid-reader__detail-dialog");
     if (dialog) {
       positionDetailDialog(dialog);
+      repositionOpenCommentEmojiPickers();
     }
   }
 
@@ -3252,6 +3497,23 @@
     }
 
     const origin = event.target instanceof Element ? event.target : null;
+    const emojiPanel = origin?.closest(".weibo-grid-reader__comment-emoji-panel");
+    if (emojiPanel && dialog.contains(emojiPanel)) {
+      const emojiGrid = emojiPanel.querySelector(".weibo-grid-reader__comment-emoji-grid");
+      const sideContent = emojiPanel.closest(".weibo-grid-reader__detail-side-content");
+      event.preventDefault();
+      if (canScrollVertically(emojiGrid, event.deltaY)) {
+        emojiGrid.scrollTop += event.deltaY;
+      } else if (sideContent) {
+        sideContent.scrollTop += event.deltaY;
+      }
+      return;
+    }
+
+    for (const picker of dialog.querySelectorAll(".weibo-grid-reader__comment-emoji-picker[data-open='true']")) {
+      setCommentEmojiPickerOpen(picker, false);
+    }
+
     let scrollTarget = origin?.closest(
       ".weibo-grid-reader__detail-image-viewer, .weibo-grid-reader__detail-text, .weibo-grid-reader__detail-side-content, .weibo-grid-reader__detail-main, .weibo-grid-reader__detail-thumbnail-rail"
     );
