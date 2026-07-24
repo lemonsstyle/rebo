@@ -3704,8 +3704,7 @@
       <aside class="weibo-grid-reader__drawer" data-reader-panel aria-hidden="true" aria-label="微博阅读器设置">
         <header class="weibo-grid-reader__header">
           <div>
-            <p class="weibo-grid-reader__eyebrow">rebo</p>
-            <h2>阅读布局</h2>
+            <h2><span class="weibo-grid-reader__title-brand">rebo</span></h2>
           </div>
           <button class="weibo-grid-reader__close" type="button" data-reader-close aria-label="关闭抽屉">×</button>
         </header>
@@ -3748,7 +3747,7 @@
 
     root.querySelector("[data-reader-toggle]")?.addEventListener("change", (event) => {
       settings.readerEnabled = event.currentTarget.checked;
-      if (!settings.readerEnabled) {
+      if (settings.readerEnabled) {
         setDrawerOpen(false);
       }
       saveSettings();

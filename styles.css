@@ -79,12 +79,8 @@
   padding: 0 2px 12px;
 }
 
-.weibo-grid-reader__eyebrow {
+.weibo-grid-reader__title-brand {
   color: #ff8200;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  margin: 0 0 4px;
 }
 
 .weibo-grid-reader__header h2 {
