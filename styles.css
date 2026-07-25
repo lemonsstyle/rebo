@@ -390,20 +390,62 @@ html.weibo-grid-reader-detail-open {
 }
 
 .weibo-grid-reader__detail-dialog {
+  --weibo-grid-detail-height: 620px;
+  --weibo-grid-detail-image-height: 440px;
+  --weibo-grid-detail-media-height: 280px;
+  --weibo-grid-detail-media-width: 420px;
+  --weibo-grid-detail-side-width: 280px;
+  --weibo-grid-detail-text-compact-height: 420px;
+  --weibo-grid-detail-text-compact-width: 580px;
+  --weibo-grid-detail-text-medium-height: 500px;
+  --weibo-grid-detail-text-medium-width: 680px;
+  --weibo-grid-detail-text-short-height: 360px;
+  --weibo-grid-detail-text-short-width: 500px;
+  --weibo-grid-detail-width: 840px;
   background: #fff;
   border: 1px solid rgb(0 0 0 / 7%);
   border-radius: 16px;
   box-shadow: 0 16px 44px rgb(0 0 0 / 20%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  height: min(620px, calc(100vh - 28px));
+  grid-template-columns: minmax(0, 1fr) var(--weibo-grid-detail-side-width);
+  height: min(var(--weibo-grid-detail-height), calc(100vh - 28px));
   overflow: hidden;
   position: fixed;
-  width: min(840px, calc(100vw - 28px));
+  width: min(var(--weibo-grid-detail-width), calc(100vw - 28px));
+}
+
+.weibo-grid-reader__detail-dialog[data-weibo-grid-density-columns="2"] {
+  --weibo-grid-detail-height: 700px;
+  --weibo-grid-detail-image-height: 500px;
+  --weibo-grid-detail-media-height: 320px;
+  --weibo-grid-detail-media-width: 480px;
+  --weibo-grid-detail-side-width: 300px;
+  --weibo-grid-detail-text-compact-height: 470px;
+  --weibo-grid-detail-text-compact-width: 650px;
+  --weibo-grid-detail-text-medium-height: 560px;
+  --weibo-grid-detail-text-medium-width: 760px;
+  --weibo-grid-detail-text-short-height: 400px;
+  --weibo-grid-detail-text-short-width: 560px;
+  --weibo-grid-detail-width: 960px;
+}
+
+.weibo-grid-reader__detail-dialog[data-weibo-grid-density-columns="4"] {
+  --weibo-grid-detail-height: 560px;
+  --weibo-grid-detail-image-height: 390px;
+  --weibo-grid-detail-media-height: 250px;
+  --weibo-grid-detail-media-width: 380px;
+  --weibo-grid-detail-side-width: 260px;
+  --weibo-grid-detail-text-compact-height: 390px;
+  --weibo-grid-detail-text-compact-width: 540px;
+  --weibo-grid-detail-text-medium-height: 460px;
+  --weibo-grid-detail-text-medium-width: 630px;
+  --weibo-grid-detail-text-short-height: 330px;
+  --weibo-grid-detail-text-short-width: 460px;
+  --weibo-grid-detail-width: 760px;
 }
 
 .weibo-grid-reader__detail-dialog--gallery {
-  grid-template-columns: minmax(0, 1fr) 70px 280px;
+  grid-template-columns: minmax(0, 1fr) 70px var(--weibo-grid-detail-side-width);
 }
 
 .weibo-grid-reader__detail-dialog--text-only {
@@ -412,18 +454,18 @@ html.weibo-grid-reader-detail-open {
 }
 
 .weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="short"] {
-  height: min(360px, calc(100vh - 28px));
-  width: min(500px, calc(100vw - 28px));
+  height: min(var(--weibo-grid-detail-text-short-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-short-width), calc(100vw - 28px));
 }
 
 .weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="compact"] {
-  height: min(420px, calc(100vh - 28px));
-  width: min(580px, calc(100vw - 28px));
+  height: min(var(--weibo-grid-detail-text-compact-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-compact-width), calc(100vw - 28px));
 }
 
 .weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="medium"] {
-  height: min(500px, calc(100vh - 28px));
-  width: min(680px, calc(100vw - 28px));
+  height: min(var(--weibo-grid-detail-text-medium-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-medium-width), calc(100vw - 28px));
 }
 
 .weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side {
@@ -432,7 +474,7 @@ html.weibo-grid-reader-detail-open {
 }
 
 .weibo-grid-reader__detail-dialog--image-focus {
-  height: min(620px, calc(100vh - 28px));
+  height: min(var(--weibo-grid-detail-height), calc(100vh - 28px));
 }
 
 .weibo-grid-reader__detail-main {
@@ -535,7 +577,7 @@ html.weibo-grid-reader-detail-open {
   border-radius: 12px;
   cursor: zoom-in;
   display: flex;
-  height: min(440px, calc(100vh - 180px));
+  height: min(var(--weibo-grid-detail-image-height), calc(100vh - 180px));
   justify-content: center;
   max-width: 100%;
   min-height: 260px;
@@ -599,9 +641,9 @@ html.weibo-grid-reader-detail-open {
 .weibo-grid-reader__detail-main .weibo-grid-reader__video-wrap {
   align-self: start;
   margin-top: 0;
-  max-height: 280px;
-  max-width: 420px;
-  width: min(100%, 420px);
+  max-height: var(--weibo-grid-detail-media-height);
+  max-width: var(--weibo-grid-detail-media-width);
+  width: min(100%, var(--weibo-grid-detail-media-width));
 }
 
 .weibo-grid-reader__status-media-stack,

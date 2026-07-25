@@ -9,12 +9,12 @@
   const SETTINGS_KEY = "weiboGridReaderSettings";
   const DEFAULT_SETTINGS = Object.freeze({
     readerEnabled: true,
-    columnCount: 3
+    columnCount: 2
   });
   const DENSITY_OPTIONS = Object.freeze({
-    3: { label: "稀疏" },
-    4: { label: "适中" },
-    5: { label: "密集" }
+    2: { label: "稀疏" },
+    3: { label: "适中" },
+    4: { label: "密集" }
   });
   const VIDEO_QUALITY_LEVELS = Object.freeze({
     original: { key: "original", label: "原画", rank: 5 },
@@ -256,7 +256,7 @@
       densitySlider.setAttribute("aria-valuetext", density.label);
       densitySlider.style.setProperty(
         "--weibo-grid-reader-density-progress",
-        `${((settings.columnCount - 3) / 2) * 100}%`
+        `${((settings.columnCount - 2) / 2) * 100}%`
       );
     }
     for (const label of densityLabels || []) {
@@ -3737,6 +3737,7 @@
 
     const dialog = document.createElement("div");
     dialog.className = "weibo-grid-reader__detail-dialog";
+    dialog.dataset.weiboGridDensityColumns = String(settings.columnCount);
     const detailMedia = createDetailMedia(status.retweeted_status || status);
     const isTextOnlyDetail = !detailMedia.media && !status.retweeted_status;
     const main = document.createElement("main");
@@ -4132,11 +4133,11 @@
               <strong>信息密度</strong>
             </span>
             <div class="weibo-grid-reader__density-control">
-              <input class="weibo-grid-reader__density-slider" type="range" min="3" max="5" step="1" value="3" data-density-slider aria-label="选择信息密度">
+              <input class="weibo-grid-reader__density-slider" type="range" min="2" max="4" step="1" value="2" data-density-slider aria-label="选择信息密度">
               <div class="weibo-grid-reader__density-labels" aria-hidden="true">
-                <span data-density-label="3">稀疏</span>
-                <span data-density-label="4">适中</span>
-                <span data-density-label="5">密集</span>
+                <span data-density-label="2">稀疏</span>
+                <span data-density-label="3">适中</span>
+                <span data-density-label="4">密集</span>
               </div>
             </div>
           </div>
@@ -4163,7 +4164,7 @@
 
     root.querySelector("[data-density-slider]")?.addEventListener("input", (event) => {
       const nextColumnCount = Number(event.currentTarget.value);
-      if (![3, 4, 5].includes(nextColumnCount)) {
+      if (![2, 3, 4].includes(nextColumnCount)) {
         return;
       }
 
@@ -4213,12 +4214,18 @@
       try {
         chrome.storage.local.get(SETTINGS_KEY, (stored) => {
           const storedSettings = { ...DEFAULT_SETTINGS, ...stored[SETTINGS_KEY] };
+          const storedColumnCount = Number(storedSettings.columnCount);
           settings = {
             ...storedSettings,
-            columnCount: [3, 4, 5].includes(Number(storedSettings.columnCount))
-              ? Number(storedSettings.columnCount)
-              : DEFAULT_SETTINGS.columnCount
+            columnCount: storedColumnCount === 5
+              ? 4
+              : [2, 3, 4].includes(storedColumnCount)
+                ? storedColumnCount
+                : DEFAULT_SETTINGS.columnCount
           };
+          if (storedColumnCount === 5) {
+            saveSettings();
+          }
           resolve();
         });
       } catch {
