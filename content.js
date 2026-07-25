@@ -1598,18 +1598,12 @@
       return button;
     };
     const zoomOut = createToolbarButton("−", "缩小图片");
-    const zoomStatus = document.createElement("output");
-    zoomStatus.className = "weibo-grid-reader__image-preview-scale";
-    zoomStatus.setAttribute("aria-live", "polite");
-    zoomStatus.textContent = "加载中…";
-    const zoomIn = createToolbarButton("+", "放大图片");
     const fit = createToolbarButton("适应", "完整显示图片", "恢复为适应窗口");
-    const actualSize = createToolbarButton("1:1", "按原始像素查看", "按原始像素查看（最高 400%）");
-    toolbar.append(zoomOut, zoomStatus, zoomIn, fit, actualSize);
+    const zoomIn = createToolbarButton("+", "放大图片");
+    toolbar.append(zoomOut, fit, zoomIn);
     zoomOut.disabled = true;
     zoomIn.disabled = true;
     fit.disabled = true;
-    actualSize.disabled = true;
 
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__comment-image-preview-full";
@@ -1620,12 +1614,14 @@
     }
     let sourceIndex = 0;
     let scale = 1;
-    let fitRatio = 1;
     let panX = 0;
     let panY = 0;
     let activePointerId = null;
     let pointerX = 0;
     let pointerY = 0;
+    let dragDistance = 0;
+    let didDrag = false;
+    let suppressImageClickUntil = 0;
     let resizeObserver = null;
 
     const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -1640,18 +1636,15 @@
       image.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
       const isZoomed = scale > 1.001;
       layer.classList.toggle("weibo-grid-reader__comment-image-preview-layer--zoomed", isZoomed);
-      zoomStatus.textContent = isZoomed ? `${Math.round(scale * 100)}%` : "适应窗口";
       zoomOut.disabled = !isZoomed;
       fit.disabled = !isZoomed;
       zoomIn.disabled = scale >= DETAIL_IMAGE_PREVIEW_MAX_SCALE - 0.001;
-      const naturalScale = fitRatio > 0 ? 1 / fitRatio : 1;
-      actualSize.disabled = naturalScale <= 1.001;
     };
     const layoutFittedImage = () => {
       if (!image.naturalWidth || !image.naturalHeight || !viewport.clientWidth || !viewport.clientHeight) {
         return;
       }
-      fitRatio = Math.min(
+      const fitRatio = Math.min(
         viewport.clientWidth / image.naturalWidth,
         viewport.clientHeight / image.naturalHeight
       );
@@ -1685,7 +1678,11 @@
       if (event && image.hasPointerCapture?.(activePointerId)) {
         image.releasePointerCapture(activePointerId);
       }
+      if (didDrag) {
+        suppressImageClickUntil = performance.now() + 300;
+      }
       activePointerId = null;
+      didDrag = false;
       layer.classList.remove("weibo-grid-reader__comment-image-preview-layer--dragging");
     };
     const loadSource = () => {
@@ -1714,19 +1711,13 @@
     zoomOut.addEventListener("click", () => setScale(scale - DETAIL_IMAGE_PREVIEW_ZOOM_STEP));
     zoomIn.addEventListener("click", () => setScale(scale + DETAIL_IMAGE_PREVIEW_ZOOM_STEP));
     fit.addEventListener("click", () => setScale(1));
-    actualSize.addEventListener("click", () => {
-      setScale(clamp(1 / fitRatio, 1, DETAIL_IMAGE_PREVIEW_MAX_SCALE));
-    });
-    image.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setScale(scale > 1.001 ? 1 : 2, event.clientX, event.clientY);
-    });
     image.addEventListener("pointerdown", (event) => {
       if (scale <= 1.001 || event.button !== 0) {
         return;
       }
       event.preventDefault();
+      dragDistance = 0;
+      didDrag = false;
       activePointerId = event.pointerId;
       pointerX = event.clientX;
       pointerY = event.clientY;
@@ -1737,8 +1728,12 @@
       if (event.pointerId !== activePointerId) {
         return;
       }
-      panX += event.clientX - pointerX;
-      panY += event.clientY - pointerY;
+      const deltaX = event.clientX - pointerX;
+      const deltaY = event.clientY - pointerY;
+      dragDistance += Math.hypot(deltaX, deltaY);
+      didDrag = dragDistance > 3;
+      panX += deltaX;
+      panY += deltaY;
       pointerX = event.clientX;
       pointerY = event.clientY;
       updatePreview();
@@ -1766,7 +1761,7 @@
         event.preventDefault();
         setScale(1);
       } else if (event.key === "Tab") {
-        const controls = [zoomOut, zoomIn, fit, actualSize, close].filter((control) => !control.disabled && !control.hidden);
+        const controls = [zoomOut, fit, zoomIn, close].filter((control) => !control.disabled && !control.hidden);
         const currentIndex = controls.indexOf(document.activeElement);
         if (event.shiftKey && currentIndex <= 0) {
           event.preventDefault();
@@ -1782,6 +1777,19 @@
     viewport.append(stage);
     layer.append(viewport, toolbar, close);
     layer.addEventListener("click", (event) => {
+      if (event.target === image) {
+        if (performance.now() < suppressImageClickUntil) {
+          return;
+        }
+        setScale(
+          scale <= 1.001
+            ? 2
+            : scale + DETAIL_IMAGE_PREVIEW_ZOOM_STEP * 2,
+          event.clientX,
+          event.clientY
+        );
+        return;
+      }
       if (event.target === layer || event.target === viewport || event.target === stage) {
         closeDetailImagePreview();
       }

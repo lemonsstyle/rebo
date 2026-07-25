@@ -1457,13 +1457,6 @@ html.weibo-grid-reader-detail-open {
   opacity: 0.35;
 }
 
-.weibo-grid-reader__image-preview-scale {
-  color: rgb(255 255 255 / 86%);
-  font-size: 12px;
-  min-width: 70px;
-  text-align: center;
-}
-
 .weibo-grid-reader__image-preview-error {
   color: rgb(255 255 255 / 82%);
   font-size: 14px;
@@ -1717,6 +1710,37 @@ html.weibo-grid-reader-detail-open {
 
 .weibo-grid-reader__image-wrap--three-first-landscape .weibo-grid-reader__image-cell:first-child {
   grid-column: 1 / span 2;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi {
+  align-self: stretch;
+  aspect-ratio: 4 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  max-height: none;
+  max-width: none;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:first-child {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image {
+  object-fit: contain;
+  object-position: center;
+  transform: none;
 }
 
 .weibo-grid-reader__image-cell {
