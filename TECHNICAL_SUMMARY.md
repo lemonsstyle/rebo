@@ -1,6 +1,5 @@
-# 微博网格阅读器：技术总结
+# 微博多列信息流阅读插件 rebo：技术总结
 
-> 适用版本：`tidy` 分支、Manifest `0.1.2`<br>
 > 文档语言：中文<br>
 > 面向读者：后续维护者、需要理解实现边界的使用者
 
@@ -10,7 +9,7 @@
 
 - 保留左侧分组导航；
 - 默认隐藏原生右栏及帮助、合作、举报等服务底栏；
-- 把当前首页或分组页的信息流重新渲染为可选 `3 / 4 / 5` 列的瀑布流卡片；
+- 把当前首页或分组页的信息流重新渲染为可选 `2 / 3 / 4` 列的瀑布流卡片；
 - 在卡片原位置附近展开自定义详情，而不是跳转到微博官方详情页；
 - 在详情中显示原文、转发内容、媒体与评论，并在不关闭详情时保持背景信息流静止。
 - 在详情中提交转发或新评论，以及点赞或取消点赞；计数会同步到当前卡片。
@@ -57,9 +56,9 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
         └──── window.postMessage 响应 ─────────┘
 ```
 
-之所以引入 `page-bridge.js`，是因为内容脚本和网页脚本处于隔离世界。信息流、评论接口需要沿用已登录网页的同源请求语义；桥接脚本在网页上下文中读取**非 HttpOnly** 的 `XSRF-TOKEN`，构造请求头并调用 `window.fetch`。它还会记录微博自己正在使用的时间线端点和首屏响应，供本地读取器按当前路由复用。`content.js` 只通过带随机 `requestId` 的同源 `window.postMessage` 发出请求并等待响应，超时为 8 秒。
+之所以引入 `page-bridge.js`，是因为内容脚本和网页脚本处于隔离世界。信息流、评论接口需要沿用已登录网页的同源请求语义；桥接脚本在网页上下文中读取**非 HttpOnly** 的 `XSRF-TOKEN`，构造请求头并调用 `window.fetch`。它还会记录微博自己正在使用的时间线端点和首屏响应，供本地读取器按当前路由复用。`content.js` 只通过带随机 `requestId` 的同源 `window.postMessage` 发出请求并等待响应，超时为 8 秒（`bridgeRequest` 中 `window.setTimeout` 设为 8000ms）。每个请求还附带内容脚本启动时生成的一次性 `BRIDGE_SESSION_ID`（基于 `Date.now()` 和 `Math.random()`），响应端必须匹配该会话标识才会被接受。
 
-当前通信频道为 `weibo-grid-reader-v4`。桥接消息会检查：
+桥接脚本通过 `web_accessible_resources` 声明为可访问资源，由内容脚本在 `injectBridge` 中动态创建 `<script>` 标签注入页面（`run_at: document_idle`）；注入完成后立即移除脚本标签。当前通信频道为 `weibo-grid-reader-v4`。桥接消息会检查：
 
 - `event.source === window`；
 - `event.origin === window.location.origin`；
@@ -68,7 +67,7 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
 
 这不是加密通道，但可避免页面中无关消息被当成扩展响应处理。
 
-转发、评论、点赞和取消点赞是有副作用的桥接消息。桥接脚本除上述检查外，还要求 `navigator.userActivation.isActive` 为真，因此只接受详情表单提交或点赞按钮点击所在的用户手势；脚本定时任务或普通页面消息不能直接触发账号操作。提交请求以表单编码发送到当前 `weibo.com` 同源地址，并尽量复用微博页面已有的 `wbBotDetector` 指纹字段；扩展不会存储该字段。
+转发、评论、点赞和取消点赞是有副作用的桥接消息（消息类型包括 `create-comment`、`create-comment-reply`、`create-repost`、`set-attitude`、`cancel-attitude`、`set-comment-like`、`cancel-comment-like`）。桥接脚本除上述检查外，还要求 `navigator.userActivation.isActive` 为真，因此只接受详情表单提交或点赞按钮点击所在的用户手势；脚本定时任务或普通页面消息不能直接触发账号操作。只读类消息（`fetch-timeline`、`fetch-comments`、`fetch-long-text`）不做用户手势校验。提交请求以表单编码（`application/x-www-form-urlencoded`）发送到当前 `weibo.com` 同源地址，并通过 `getBotFingerprint(source)` 调用页面已有的 `wbBotDetector?.get?.({ useCache: false, from: source })` 获取 `rid` 作为 `fp` 指纹字段；不同操作使用不同的 `source` 标识（如 `"weibo-comment"`、`"weibo-like"`、`"weibo-comment-like"` 等），扩展不会存储该字段。
 
 ## 5. 页面识别、挂载与卸载
 
@@ -116,7 +115,7 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
 - 首页使用 `since_id=0`；
 - 后续页使用响应的 `max_id`。
 
-接口请求失败后会在 500ms 后重试一次。响应必须包含 `statuses` 数组；否则视为失败。首屏未能获得有效数据时，原版列表保持可见，读取器以 150ms 起步的递增间隔重试。此策略避免把固定的、可能过期的完整请求 URL 写死在扩展中。
+接口请求失败后会在 500ms 后重试一次（`requestTimeline` 内部最多尝试 2 次）。响应必须包含 `statuses` 数组；否则视为失败并通过 `forgetTimelineEndpoint` 丢弃失效模板。首屏未能获得有效数据时，原版列表保持可见，读取器以 150ms 起步的递增间隔重试（`scheduleReaderRetry` 使用 `Math.min(4000, 400 * (2 ** Math.min(attempt - 1, 4)))` 的指数退避，首次为固定 150ms）。此策略避免把固定的、可能过期的完整请求 URL 写死在扩展中。
 
 对于响应中标记为 `isLongText`（或兼容字段）的微博，扩展会在用户点击卡片“展开全文”或打开详情时按需请求同源 `/ajax/statuses/longtext?id=<status-id>`。返回的 `longTextContent`（以及兼容字段）会缓存到当前页面会话，并回填到卡片或详情正文；因此同一条长微博不会因卡片展开与详情打开重复请求。
 
@@ -124,7 +123,7 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
 
 `readerSeenIds` 使用微博状态的 `idstr / id / mid / mblogid` 去重。`readerMaxId` 保存下一页游标；只有游标为空、为 `0`、没有推进或响应为空时，读取器才标记为耗尽。分页边界偶尔会返回一页已出现的微博：只要游标仍在推进，读取器会自动跳过重复页、最多连续尝试三页，避免把正常的重叠页误判为结束。
 
-补页主要由位于卡片墙底部的 sentinel 触发：它进入距视窗 900px 的范围时请求下一页。卡片初次追加、窗口尺寸变化、页面刷新和窗口滚动也会通过 `requestAnimationFrame` 调度一次近底检查；图片等媒体变化会重新计算瀑布流高度，从而移动 sentinel。底部会显示加载动画；非首屏请求失败时自动重试三次，之后提示用户继续下滚即可重试。`readerLoading`、`readerExhausted` 和状态 ID 集合共同避免并发重复请求、无尽请求与重复卡片。
+补页主要由位于卡片墙底部的 sentinel 触发：它进入距视窗 900px 的范围时请求下一页（`IntersectionObserver` 的 `rootMargin` 为 `"900px 0px"`）。卡片初次追加、窗口尺寸变化、页面刷新和窗口滚动也会通过 `requestAnimationFrame` 调度一次近底检查；图片等媒体变化会重新计算瀑布流高度，从而移动 sentinel。底部会显示加载动画（CSS `@keyframes weibo-grid-reader-loading-spin`，720ms 线性旋转）；非首屏请求失败时最多自动重试 `MAX_AUTOMATIC_LOAD_RETRIES`（3）次，使用 `Math.min(4000, 500 * (2 ** Math.min(attempt, 3)))` 的指数退避，之后提示用户继续下滚即可重试。`readerLoading`、`readerExhausted` 和 `readerSeenIds`（`Set`，以 `idstr / id / mid / mblogid` 去重）共同避免并发重复请求、无尽请求与重复卡片。连续空页由 `readerDuplicatePageCount` 计数，超过 `MAX_CONSECUTIVE_DUPLICATE_PAGES`（3）页才标记耗尽。
 
 ## 7. 卡片渲染与瀑布流算法
 
@@ -149,7 +148,7 @@ HTML 文本不会直接写回页面。实现先放入 `<template>`，然后只�
 cardWidth = (gridWidth - gap × (columns - 1)) / columns
 ```
 
-再把下一张卡片放到当前高度最小的列，最后将容器高度设置为最高列高度。默认桌面为“稀疏”（两列），控制面板可通过“稀疏 / 适中 / 密集”三档滑杆切换为两、三或四列；窄屏（`<=760px`）固定两列。旧版保存的五列设置会自动收敛为新版上限四列。
+再把下一张卡片放到当前高度最小的列，最后将容器高度设置为最高列高度。默认桌面为“稀疏”（两列，`DEFAULT_SETTINGS.columnCount = 2`），控制面板可通过“稀疏 / 适中 / 密集”三档滑杆切换为两、三或四列（`DENSITY_OPTIONS` 仅定义 `2 / 3 / 4` 三个键）；窄屏（`window.innerWidth <= 760`）由 `getMasonryColumnCount()` 强制返回 2 列。旧版保存的五列设置会在 `loadSettings` 中自动收敛为四列并回写 `chrome.storage`。
 
 首次布局或列宽变化时，读取器会测量卡片高度并选择当前最短列。之后每张卡片都由 `ResizeObserver` 维护高度缓存：图片、视频元数据或表情导致卡片变高/变矮时，读取器只使用缓存重新计算位置，不会在滚动过程中再次对整墙逐张读取 `offsetHeight`。卡片会保留初次分配的列，变化只会推移同列后续卡片，避免为了重新均衡列高而让全墙卡片横向跳列。
 
@@ -159,10 +158,10 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 ### 7.3 媒体卡片策略
 
-- 单图保持接近原比例，但约束在 `0.8–1.78` 的展示比例内，避免极端竖图或横图把卡片撑得过高或过宽。
+- 单图保持接近原比例，但约束在 `0.8–1.78` 的展示比例内（`Math.max(0.8, Math.min(1.78, naturalRatio))`，由图片 `load` 事件中的 `naturalWidth / naturalHeight` 计算），避免极端竖图或横图把卡片撑得过高或过宽。
 - 多图最多展示四张，更多图片在最后一格显示 `+N`。两列信息流会利用宽卡片的横向空间，把 2–4 张图片铺成一排并让图片区占满卡片宽度；这一档的图片使用 `contain` 完整显示，不裁切、不放大。三列和四列信息流继续使用紧凑拼图：两张竖图左右并列、两张横图上下排列，三张图按第一张方向决定主图占左半或上半，四张及以上使用田字格。
 - 多图使用轻微、渐变式的 `object-position` 和缩放来减少裁切突兀感；这些只是视觉近似，不是无损原图浏览。
-- 视频使用原响应中的流地址及封面，以 `<video controls>` 预览；无法播放且存在微博页面地址时显示回退提示。
+- 视频使用原响应中的流地址及封面，以 `<video controls playsinline preload="metadata">` 预览。当响应包含多个播放源时（`playback_list`、`stream_url_hd`、`mp4_hd_url`、`stream_url`、`mp4_sd_url` 等），扩展按分辨率或标签文本识别清晰度等级（原画/超清/高清/标清/流畅/自动，对应 `VIDEO_QUALITY_LEVELS` 的 rank 排序），生成 `<select>` 清晰度切换器；切换时保存当前播放进度、音量和播放速率，在新源 `loadedmetadata` 后恢复。源加载失败时先尝试同清晰度的备用 URL，再降级到其他可用清晰度，全部失败且存在微博页面地址时显示回退提示。
 - 同时包含视频、图片或文章卡片时采用纵向媒体栈，而不是二选一丢弃其中一类媒体。
 - 没有微博可播放流、但 `page_info` 提供标题、简介或封面的外站网页/视频会渲染为可点击预览卡（例如 B 站链接）；卡片跳转到微博接口提供的网页地址，不尝试在扩展内抓取或播放第三方视频。若接口没有提供预览元数据，仍保留普通可点击链接。
 
@@ -178,11 +177,13 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 普通详情左侧为正文和媒体，右侧为评论栏；详情尺寸会跟随信息密度选择，三列档保持原尺寸不变：
 
-| 信息密度 | 信息流列数 | 普通详情上限 | 评论栏宽度 |
-| --- | ---: | ---: | ---: |
-| 稀疏 | 2 列 | `960×700` | `300px` |
-| 适中 | 3 列 | `840×620` | `280px` |
-| 密集 | 4 列 | `760×560` | `260px` |
+| 信息密度 | 信息流列数 | CSS 变量前缀 | 普通详情上限 | 评论栏宽度 |
+| --- | ---: | --- | ---: | ---: |
+| 稀疏 | 2 列 | `[data-weibo-grid-density-columns="2"]` | `960×700` | `300px` |
+| 适中 | 3 列 | 默认值（无 data 属性） | `840×620` | `280px` |
+| 密集 | 4 列 | `[data-weibo-grid-density-columns="4"]` | `760×560` | `260px` |
+
+详情对话框通过 `dialog.dataset.weiboGridDensityColumns = settings.columnCount` 设置密度属性，CSS 通过属性选择器覆盖对应的 `--weibo-grid-detail-*` 自定义属性。纯文字详情还有额外的 `data-weibo-grid-text-size` 属性（`short` ≤ 32 字、`compact` ≤ 80 字、`medium` ≤ 180 字、`standard` 更长），尺寸独立于密度档位。
 
 所有尺寸仍受浏览器视口 14px 边距约束；小屏布局继续铺满可用视口，不强行使用桌面档位。多图详情在正文与评论之间加入 70px 的缩略图列。正文图片查看框和普通媒体预览也随档位等比例收放，避免只改变外框而留下明显空白。纯文字且没有转发内容时切换为上下结构：正文行按实际内容高度增长、最多占详情高度的约 `45%`；评论紧随正文开始，剩余空间由评论列表使用，避免短文字上方留下固定空白。纯文字详情仍按去除空白后的字数选择短、紧凑、中等或默认四档尺寸，并在两列档放大、四列档缩小；长微博保持对应密度的默认大小，避免全文异步加载后频繁改变卡片尺寸。
 
@@ -201,23 +202,23 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 | 多图缩略图列 | 原生滚动条隐藏；点击缩略图切换主图，并把选中项平滑移到列表中部，露出后续缩略图。 |
 | 右侧评论 | 仅滚动评论列表。 |
 
-详情正文图和评论图共用同一个覆盖浏览器可视区域的灯箱，打开后先以“适应窗口”完整显示并保留安全边距。图片在适应窗口时显示放大镜光标，点击图片会以点击位置为中心放大；继续点击可逐步放大至 `400%`。放大后鼠标变为抓取样式，按住图片即可拖动查看细节。底部工具栏只提供“缩小”“适应窗口”“放大”三个按钮；滚轮或键盘 `+ / −` 也可缩放，`0` 键或“适应窗口”按钮恢复完整显示。点击图片周围的暗色区域、右上关闭按钮或按 `Escape` 退出；拖动图片后的释放动作不会误触发缩放或关闭。关闭后把键盘焦点还给此前触发预览的图片。正文和评论的滚动条默认透明，仅在鼠标悬停其区域时显示为细条；多图缩略图列不显示原生滚动条。
+详情正文图和评论图共用同一个覆盖浏览器可视区域的灯箱（`openDetailImagePreview` 函数），打开后先以“适应窗口”完整显示并保留安全边距（`env(safe-area-inset-*)`）。图片在适应窗口时显示放大镜光标，点击图片会以点击位置为中心放大（首次点击放大到 2x，后续每次增加 `DETAIL_IMAGE_PREVIEW_ZOOM_STEP`（0.25））；继续点击可逐步放大至 `DETAIL_IMAGE_PREVIEW_MAX_SCALE`（400%）。缩放以视口中心为基准偏移，点击位置决定 `panX / panY` 的初始平移量。放大后鼠标变为抓取样式，按住图片即可拖动查看细节（通过 `PointerEvent` 的 `setPointerCapture` 实现，`dragDistance > 3px` 才判定为拖动，防止轻微移动误触发）；拖动后的释放通过 `suppressImageClickUntil` 时间戳抑制 300ms 内的误点击缩放。底部工具栏只提供“缩小”“适应窗口”“放大”三个按钮；滚轮（`Math.exp(-deltaY * 0.0015)` 指数缩放因子）或键盘 `+ / −` 也可缩放，`0` 键或“适应窗口”按钮恢复完整显示。键盘 `Tab` 在工具栏按钮和关闭按钮之间循环。点击图片周围的暗色区域、右上关闭按钮或按 `Escape` 退出；图片源按序尝试，全部失败时显示错误文案。关闭后把键盘焦点还给此前触发预览的图片（`returnFocus`）。灯箱内的 `ResizeObserver` 监听视口尺寸变化并重新计算适应尺寸。正文和评论的滚动条默认透明，仅在鼠标悬停其区域时显示为细条；多图缩略图列不显示原生滚动条。
 
 ## 9. 转发、评论、点赞与评论图片
 
 详情打开后，桥接脚本通过同源：
 
 ```text
-/ajax/statuses/buildComments?id=<status-id>&count=20&max_id=<cursor>
+/ajax/statuses/buildComments?id=<status-id>&flow=0&is_reload=1&is_mix=0&count=20&max_id=<cursor>&max_id_type=0&is_show_bulletin=2&fetch_level=0&locale=zh-CN
 ```
 
-评论接口按每页 20 条顶级评论返回；读取器使用响应中的 `max_id` 游标，在滚动到评论列表末尾时继续加载后续页面，并按评论 ID 去重。微博当前响应会把回复放在每条顶级评论的 `comments` 子数组中；读取器会递归渲染最多两层子回复。嵌套缩进已足以表达回复关系，因此不会在子回复下重复渲染父评论；`rootid` 仅是微博根标识，不能可靠代表父评论。博主本人回复其他评论时会隐藏其重复显示的名字。请求失败或无数据时，详情中会明确显示失败原因或“暂时没有可展示的评论”，不会伪造评论内容。
+（`is_reload=1` 仅在首次加载时设置，追加翻页时不传；其余参数固定。）评论接口按每页 20 条顶级评论返回；读取器使用响应中的 `max_id`（兼容 `max_id_str`、`next_cursor`）游标，在滚动到评论列表末尾时继续加载后续页面，并按评论 ID 去重。总评论数取自 `total_number`（兼容 `total`），用于判断是否已加载完毕。微博当前响应会把回复放在每条顶级评论的 `comments`（兼容 `replies`、`children`）子数组中；读取器会递归渲染最多两层子回复（`depth < 2`）。嵌套缩进已足以表达回复关系，因此不会在子回复下重复渲染父评论；回复关系通过 `reply_comment`（兼容 `replyComment`、`reply_comment_info`、`reply`）字段解析，`rootid` 仅是微博根标识，不能可靠代表父评论。博主本人（`postAuthorId`）回复其他评论时会隐藏其重复显示的名字，改为显示紧凑的"博主"标签（`weibo-grid-reader__comment-author-badge`）。请求失败或无数据时，详情中会明确显示失败原因或“暂时没有可展示的评论”，不会伪造评论内容。
 
-详情输入框提交文本评论时，请求 `POST /ajax/comments/create`，字段为 `id`、`comment` 及微博网页使用的 `is_repost=0`、`comment_ori=0`、`is_comment=0`。顶级评论和楼中楼回复输入框都提供常用表情面板；面板默认收起，只有点击“添加表情”按钮才以固定定位浮层展开并覆盖下方评论，不参与评论区布局或改变右侧滚动高度，向下空间不足时会自动显示在按钮上方。鼠标位于面板内时滚轮优先滚动表情网格。表情资源来自微博当前官方 `PC 热门表情`，点选时在光标处插入官方使用的 `[表情名]` 文本编码，因此提交接口与字段不变，也不需要单独上传表情。转发请求 `POST /ajax/statuses/normal_repost`，可在 `comment` 为空时直接转发，默认附带 `visible=0`。微博点赞和取消点赞分别请求 `POST /ajax/statuses/setLike` 与 `POST /ajax/statuses/cancelLike`，均只传当前微博的 `id`。这些请求使用表单编码、当前登录会话、同源 `X-XSRF-TOKEN` 请求头，以及网页可用时的反自动化 `fp` 字段；收到 `ok > 0` 才将操作视为成功。
+详情输入框提交文本评论时，请求 `POST /ajax/comments/create`，字段为 `id`、`comment` 及微博网页使用的 `is_repost=0`、`comment_ori=0`、`is_comment=0`。顶级评论和楼中楼回复输入框都提供常用表情面板；面板默认收起，只有点击“添加表情”按钮才以固定定位浮层展开并覆盖下方评论，不参与评论区布局或改变右侧滚动高度，向下空间不足时会自动显示在按钮上方。鼠标位于面板内时滚轮优先滚动表情网格。表情资源来自微博当前官方 `PC 热门表情`，点选时在光标处插入官方使用的 `[表情名]` 文本编码，因此提交接口与字段不变，也不需要单独上传表情。转发请求 `POST /ajax/statuses/normal_repost`，字段为 `id`、`comment`、`is_repost=0`、`comment_ori=0`、`is_comment=0`、`visible=0`，可在 `comment` 为空时直接转发。微博点赞和取消点赞分别请求 `POST /ajax/statuses/setLike` 与 `POST /ajax/statuses/cancelLike`，均只传当前微博的 `id`。这些请求使用表单编码、当前登录会话、同源 `X-XSRF-TOKEN` 请求头，以及网页可用时的反自动化 `fp` 字段；收到 `ok > 0` 才将操作视为成功。
 
 ### 9.1 评论的转发、回复、点赞（整行悬停 + 固定图标簇）
 
-每条评论行（含嵌套回复）的内容区拆成固定头部行和正文行：普通评论头部左侧显示用户名，博主回复不重复完整昵称、改为显示紧凑的“博主”标签；转发/评论/点赞图标簇处于同一头部行右侧的正常文档流中，因此不会覆盖正文。鼠标悬停这一整行的任意位置满 `COMMENT_ACTIONS_REVEAL_DELAY_MS`（120ms）后，三个图标一起淡入并恢复点击。悬停事件按事件目标最近的 `.weibo-grid-reader__comment` 归属，嵌套回复只激活自己的按钮。由于操作区不再是覆盖整行的绝对定位浮层，头像、用户名、正文 @ 提及和图片预览都直接使用原生点击事件，不再需要透明捕获层转发点击。
+每条评论行（含嵌套回复）的内容区拆成固定头部行和正文行：普通评论头部左侧显示用户名，博主回复不重复完整昵称、改为显示紧凑的“博主”标签；转发/评论/点赞图标簇处于同一头部行右侧的正常文档流中，因此不会覆盖正文。鼠标悬停这一整行的任意位置满 `COMMENT_ACTIONS_REVEAL_DELAY_MS`（120ms）后，三个图标一起淡入并恢复点击。悬停通过 `mouseover` / `mouseout` 事件实现（非 `mouseenter` / `mouseleave`），按事件目标最近的 `.weibo-grid-reader__comment` 归属（`getClosestCommentRow` 辅助函数），嵌套回复只激活自己的按钮；鼠标进入内联回复表单时不触发归属判定。图标淡入由 CSS 类 `weibo-grid-reader__comment-zone-bar--revealed` 和 `:focus-within` 伪类共同控制。由于操作区不再是覆盖整行的绝对定位浮层，头像、用户名、正文 @ 提及和图片预览都直接使用原生点击事件，不再需要透明捕获层转发点击。
 
 - **转发**：官方网页版对评论的“转发”本质仍是转发原微博，只是预填/引用了评论内容；复用详情顶部的转发框（`createDetailInteractions` 返回的 `openRepostWithQuote`），预填格式为 `//@昵称: 评论正文`，超过 140 字截断并加省略号（避免原生 `maxlength` 校验因程序化赋值超长而静默拒绝提交）。**未在真实网络面板核实过官方网页版预填的具体格式**，如与实际不一致应据此调整。
 - **评论（回复）**：在该评论行下方展开一个内联输入框（`createInlineReplyForm`），提交后请求 `POST /ajax/comments/reply`（**已抓包核实**——是独立于顶层评论 `/ajax/comments/create` 的另一个接口，最初误用 `create` + `cid` 实现，效果是把回复发成了对整条微博的普通评论），字段为 `id`（当前微博 id）、`cid`（被回复评论的 id）、`comment`、`is_repost=0`、`comment_ori=0`、`is_comment=0`；抓包里还出现了 `pic_id`（图片评论用，本扩展不支持图片评论、留空即可，`postWeiboForm` 会自动过滤空字符串字段）。成功后整体重新调用 `fetchComments` 刷新评论列表，而不是手工插入一条新 DOM 节点，以保证嵌套结构、楼中楼作者高亮等渲染逻辑与首次加载完全一致。
@@ -229,7 +230,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 微博正文和转发正文中的 `http/https` 地址（包括 `t.cn` 短链）默认按普通外链新标签打开，以便短链可跟随微博提供的重定向抵达实际网页。长文接口若把 @ 用户链接写成 `javascript:` 占位地址，读取器会从安全的 `data-url` 或 `usercard` 中恢复 `/u/<id>` 或 `/n/<用户名>` 主页链接；无法恢复时仍降级为纯文字，不会放行不安全协议。已经展开为图片扩展名的 `*.sinaimg.cn` 正文/转发链接，仍会尝试触发微博原生图片查看器。评论中的 `t.cn` 与图床链接会直接在**现有详情卡片的评论区**显示缩略图；点击缩略图打开与详情正文图相同的全视口灯箱，默认完整显示并可按需缩放、拖动，不会跳出到微博原页。
 
-微博的 `#&viewer` 路由依赖页面内部状态，不能只靠 URL 稳定定位评论图片，因此不再被当作评论图片的回退。读取器会优先从评论响应的 `url_struct` 与 `url_objects` 中提取实际 `sinaimg.cn` 地址，再按 `large`、`mw2048`、`original`、`mw1024`、`mw690`、`bmiddle`、`orj360`、缩略图等兼容尺寸排序加载。图片元素会发送完整微博页面 Referer（`referrerPolicy='unsafe-url'`）以降低图床防盗链失败；所有兼容来源均失败时，仅显示“评论图片暂时无法显示”，不会保留无效的“在微博中查看图片”链接。
+微博的 `#&viewer` 路由依赖页面内部状态，不能只靠 URL 稳定定位评论图片，因此不再被当作评论图片的回退。读取器会优先从评论响应的 `url_struct` 与 `url_objects` 中提取实际 `sinaimg.cn` 地址（`collectLinkedCommentImageUrls` 递归搜索，最大深度 5 层），提取时会对比短链与图床 URL 的资源键（`getImageResourceKey`，取 pathname 末段）来关联 `t.cn` 短链和实际图片。每张图片通过 `getCommentImageVariants` 生成多个尺寸变体（`large`、`mw2048`、`original`、`mw1024`、`mw690`、`bmiddle`、`orj360`、`thumbnail`），再按 `getCommentImageQualityRank` 的质量排名（`large` = 100、`mw2048` = 95、`original` = 92、…、缩略图 = 10）排序加载。图片元素会发送完整微博页面 Referer（`referrerPolicy='unsafe-url'`）以降低图床防盗链失败；缩略图和灯箱大图均按序尝试所有源，全部失败时仅显示“评论图片暂时无法显示”，不会保留无效的“在微博中查看图片”链接。
 
 **兼容性限制：** 评论接口若既不提供可用图床元数据、短链本身也无法作为图片加载，扩展无法绕过图床的访问控制；该评论会明确显示图片加载失败。遇到该情况，应从真实评论响应中检查 `url_struct`、`url_objects` 是否改变，并更新字段提取规则。
 
@@ -237,18 +238,19 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 微博页面的 DOM 变化频繁。若对每个 Mutation 都重建卡片墙，滚动会明显卡顿。当前实现采用以下控制：
 
-- 卡片高度由 `ResizeObserver` 缓存，常规媒体加载不再对所有卡片做强制高度读取；仅首次布局或列宽变化重新测量；
+- 卡片高度由 `readerCardResizeObserver`（`ResizeObserver`）缓存，使用 `borderBoxSize[0].blockSize` 获取边框盒高度（回退到 `contentRect.height`），变化阈值为 0.5px；常规媒体加载不再对所有卡片做强制高度读取；仅首次布局或列宽变化重新测量；
 - 卡片保持原列、使用 `translate3d` 定位，且移除了容器高度和位置动画，降低滚动中的重排与绘制压力；
 - 补页主要由位于墙底的 `IntersectionObserver` 触发，不再为每次页面滚动创建补页检测帧；
-- `MutationObserver` 只在新增节点本身或子树包含 `.vue-recycle-scroller`、`.woo-panel-left`、`.wbpro-side`、`div.scale` 时调用刷新；
-- 通过 `readerGeneration` 使旧路由的异步请求结果失效，防止切分组后旧数据回填；
+- `MutationObserver`（挂在 `document.documentElement`，`childList: true, subtree: true`）只在新增节点本身或子树包含 `.vue-recycle-scroller`、`.woo-panel-left`、`.wbpro-side`、`div.scale` 时调用刷新（`mutationNeedsRefresh` 辅助函数）；
+- `readerGeneration` 在每次 `resetReader` 和 `unmountReaderSurface` 时递增，`loadTimeline` 在请求前捕获当前 generation，响应返回后校验是否仍匹配，不匹配则静默丢弃，防止切分组后旧数据回填；
 - 页面桥接会监听微博页面自身发出的 `fetch / XHR` 信息流响应，并按当前页面路由缓存首屏数据和请求模板；目前同时识别微博的 `/ajax/feed/friendstimeline` 与 `/ajax/feed/groupstimeline`，并兼容 `list_id`、`fid` 与 `group_id`。卡片墙优先使用这份官方响应；模板一旦可用也能立即发起同源请求，避免把读取器的加载时间全部交给观察窗口。缓存未及时出现时，才以 Performance 中与当前分组匹配的官方请求为模板；根路径“全部关注”则优先选择最近的 `friendstimeline` 请求。模板会保留微博页面所需的分组上下文（例如 `groupstimeline` 的 `fast_refresh`），仅清理旧的 `since_id / max_id` 游标；失败模板会被淘汰，若没有观察到完整官方请求则保持原版信息流，不会凭空拼出基础 URL 重试。重复点击当前分组也会清空 `readerMaxId` 后重新加载第一页，保持与微博原版一致的最新优先顺序；
 - 首屏请求失败或返回空数组时会立即恢复微博原始信息流，不再保留一个隐藏源列表的空白卡片墙；
 - 原版虚拟列表会一直保留到读取器已经渲染出当前分组至少一张卡片后才隐藏；路由或分组在请求期间变化时，旧请求结果会因路由键不匹配被丢弃。
-- 桥接消息使用带版本的独立通道（当前为 `weibo-grid-reader-v4`）和内容脚本启动时生成的一次性会话标识。页面上因扩展重新加载而遗留的同版本桥接脚本无法被新内容脚本接受，从而避免旧实例用过期缓存抢答首屏或补页请求。
-- 分组链接点击后，读取器会以约 40ms 间隔等待 SPA 路由更新并立即同步；750ms 的 URL 检查仍作为浏览器后退、脚本跳转等非点击导航的兜底。若首屏尚未可用或微博页面的信息流节点稍晚出现，原版列表会继续显示，读取器以递增间隔自动重试；首次成功渲染后即停止重试，不要求用户重复点击分组、刷新页面或切换开关。
-- 通过 `readerLoading`、`readerExhausted` 和状态 ID 集合避免重复请求、无尽分页和重复卡片；
-- 独立的卡片墙宽度 `ResizeObserver` 只在宽度变化时触发完整列宽重算，避免无关元素尺寸变化触发排版。
+- 桥接消息使用带版本的独立通道（当前为 `weibo-grid-reader-v4`）和内容脚本启动时生成的一次性 `BRIDGE_SESSION_ID`（格式：`${Date.now()}-${Math.random().toString(36).slice(2)}`）。`listenForBridgeResponses` 中的响应处理器严格校验 `bridgeSessionId` 匹配，页面上因扩展重新加载而遗留的同版本桥接脚本无法被新内容脚本接受，从而避免旧实例用过期缓存抢答首屏或补页请求。`hasValidExtensionContext()` 通过 `chrome?.runtime?.id` 检测扩展上下文是否有效，失效后所有桥接请求立即返回失败。
+- 分组链接点击后，读取器记录 `readerSelectionRouteKey` 和 `readerSelectionStartedAt` 时间戳，并通过 `scheduleRouteSync` 以约 40ms 间隔等待 SPA 路由更新（最长 1.2 秒 deadline），匹配后立即调用 `refreshPage(true)` 同步；750ms 的 URL 检查（`setInterval`）仍作为浏览器后退、脚本跳转等非点击导航的兜底。同一分组重复点击时，180ms 延迟后调用 `resetReader()` 清空游标重新加载第一页。若首屏尚未可用或微博页面的信息流节点稍晚出现，原版列表会继续显示，读取器以递增间隔自动重试；首次成功渲染后即停止重试，不要求用户重复点击分组、刷新页面或切换开关。
+- `Escape` 键按优先级依次关闭：图片预览灯箱 → 详情卡片（触发 `history.back()`）→ 设置抽屉；点击抽屉外部（`pointerdown` 事件，`capture: true`）也会关闭抽屉；
+- 通过 `readerLoading`、`readerExhausted` 和 `readerSeenIds`（`Set`，以 `idstr / id / mid / mblogid` 去重）避免重复请求、无尽分页和重复卡片；
+- 独立的卡片墙宽度 `ResizeObserver`（`readerResizeObserver`）只在宽度变化时（阈值判断 `width !== observedReaderWidth`）触发完整列宽重算，避免无关元素尺寸变化触发排版。
 
 当前方案仍需要在卡片高度变化后重新计算列内纵向位置。超长信息流、网速较慢或微博响应字段变化时，用户仍可能看到同列卡片的必要位移；这是客户端绝对定位瀑布流的成本，但不应再出现每次媒体加载都对整墙做同步测量和位置动画的主要卡顿来源。
 
@@ -256,7 +258,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 `manifest.json` 只声明：
 
-- `storage`：保存“是否启用”和列数偏好；
+- `storage`：保存“是否启用”（`readerEnabled`，布尔值）和列数偏好（`columnCount`，`2 / 3 / 4`），存储键为 `weiboGridReaderSettings`，通过 `chrome.storage.local` 读写；
 - `https://weibo.com/*`、`https://www.weibo.com/*`：在微博页运行内容脚本和桥接脚本。
 
 扩展不保存 Cookie、`XSRF-TOKEN`、信息流数据、长文正文或评论，也不把这些数据发送给自建服务器或第三方服务。桥接请求只发往与当前网页同源的微博接口，并使用浏览器已有登录会话。转发文字、评论文字和点赞动作仅在用户操作详情卡片时发送给微博；扩展不自动代为执行账号操作。
