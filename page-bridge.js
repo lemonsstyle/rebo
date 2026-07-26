@@ -5,7 +5,9 @@
   const OBSERVED_TIMELINE_WAIT_MS = 320;
   const TIMELINE_ENDPOINT_WAIT_MS = 600;
   const officialTimelineByRoute = new Map();
+  const officialTimelineByGroup = new Map();
   const observedTimelineEndpointByRoute = new Map();
+  const observedTimelineEndpointByGroup = new Map();
   let readerTimelineRequestDepth = 0;
 
   function respond(requestId, bridgeSessionId, payload) {
@@ -107,13 +109,19 @@
   }
 
   function getTimelineGroupId(endpoint) {
-    return endpoint.searchParams.get("list_id")
+    return endpoint.searchParams.get("gid")
+      || endpoint.searchParams.get("list_id")
       || endpoint.searchParams.get("fid")
       || endpoint.searchParams.get("group_id")
       || "";
   }
 
   function getFeedRouteKey(value = window.location.href) {
+    if (typeof value === "string" && value.startsWith("gid=")) {
+      const groupId = new URLSearchParams(value).get("gid") || "";
+      return groupId ? `gid=${encodeURIComponent(groupId)}` : "";
+    }
+
     try {
       const url = new URL(value, window.location.href);
       if (
@@ -122,7 +130,10 @@
       ) {
         return "";
       }
-      return `${url.pathname}?gid=${url.searchParams.get("gid") || ""}`;
+      const groupId = getFeedGroupId(url);
+      return groupId
+        ? `gid=${encodeURIComponent(groupId)}`
+        : `${url.pathname}?gid=`;
     } catch {
       return "";
     }
@@ -131,6 +142,23 @@
   function resolveFeedRouteKey(routeKey) {
     const currentRouteKey = getFeedRouteKey();
     return routeKey && routeKey === currentRouteKey ? routeKey : currentRouteKey;
+  }
+
+  function getFeedGroupId(value = window.location.href) {
+    if (typeof value === "string" && value.startsWith("gid=")) {
+      return new URLSearchParams(value).get("gid") || "";
+    }
+
+    try {
+      const url = new URL(value, window.location.href);
+      return url.searchParams.get("gid")
+        || url.searchParams.get("list_id")
+        || url.searchParams.get("fid")
+        || url.searchParams.get("group_id")
+        || "";
+    } catch {
+      return "";
+    }
   }
 
   function getRequestUrl(input) {
@@ -156,7 +184,14 @@
       return "";
     }
 
-    observedTimelineEndpointByRoute.set(resolvedRouteKey, endpoint.href);
+    const groupId = getTimelineGroupId(endpoint);
+    const routeGroupId = getFeedGroupId(routeKey);
+    if (!routeGroupId || !groupId || routeGroupId === groupId) {
+      observedTimelineEndpointByRoute.set(resolvedRouteKey, endpoint.href);
+    }
+    if (groupId) {
+      observedTimelineEndpointByGroup.set(groupId, endpoint.href);
+    }
     return resolvedRouteKey;
   }
 
@@ -164,6 +199,11 @@
     const resolvedRouteKey = resolveFeedRouteKey(routeKey);
     if (observedTimelineEndpointByRoute.get(resolvedRouteKey) === endpointHref) {
       observedTimelineEndpointByRoute.delete(resolvedRouteKey);
+    }
+    for (const [groupId, rememberedEndpoint] of observedTimelineEndpointByGroup) {
+      if (rememberedEndpoint === endpointHref) {
+        observedTimelineEndpointByGroup.delete(groupId);
+      }
     }
   }
 
@@ -178,10 +218,21 @@
       return;
     }
 
-    officialTimelineByRoute.set(resolvedRouteKey, {
-      payload,
-      receivedAt: Date.now()
-    });
+    const groupId = getTimelineGroupId(endpoint);
+    const routeGroupId = getFeedGroupId(routeKey);
+    const receivedAt = Date.now();
+    if (!routeGroupId || !groupId || routeGroupId === groupId) {
+      officialTimelineByRoute.set(resolvedRouteKey, {
+        payload,
+        receivedAt
+      });
+    }
+    if (groupId) {
+      officialTimelineByGroup.set(groupId, {
+        payload,
+        receivedAt
+      });
+    }
   }
 
   function observeFetchTimeline(input, response, routeKey) {
@@ -241,7 +292,11 @@
   }
 
   function findObservedTimelineEndpoint(query) {
-    const requestedGroupId = String(query?.list_id || query?.fid || "");
+    const requestedGroupId = String(query?.list_id || query?.fid || query?.group_id || query?.gid || "");
+    const groupedEndpoint = observedTimelineEndpointByGroup.get(requestedGroupId);
+    if (groupedEndpoint) {
+      return new URL(groupedEndpoint, window.location.href);
+    }
     const entries = performance.getEntriesByType("resource").slice().reverse();
 
     for (const entry of entries) {
@@ -261,7 +316,9 @@
 
   async function getTimelineEndpoint(query, routeKey) {
     const resolvedRouteKey = resolveFeedRouteKey(routeKey);
-    const rememberedEndpoint = observedTimelineEndpointByRoute.get(resolvedRouteKey);
+    const requestedGroupId = String(query?.list_id || query?.fid || query?.group_id || query?.gid || "");
+    const rememberedEndpoint = observedTimelineEndpointByGroup.get(requestedGroupId)
+      || observedTimelineEndpointByRoute.get(resolvedRouteKey);
     if (rememberedEndpoint) {
       return new URL(rememberedEndpoint, window.location.href);
     }
@@ -292,11 +349,31 @@
     return null;
   }
 
-  async function waitForOfficialTimeline(routeKey, requestedAt) {
+  function getFreshOfficialTimelineForGroup(groupId, requestedAt) {
+    if (!groupId) {
+      return null;
+    }
+    const timeline = officialTimelineByGroup.get(String(groupId));
+    return timeline && timeline.receivedAt >= requestedAt ? timeline.payload : null;
+  }
+
+  function getFreshOfficialTimelineForRequest(routeKey, groupId, requestedAt) {
+    const normalizedGroupId = String(groupId || "");
+    const groupedPayload = getFreshOfficialTimelineForGroup(normalizedGroupId, requestedAt);
+    if (groupedPayload) {
+      return groupedPayload;
+    }
+    if (normalizedGroupId && getFeedGroupId(routeKey) !== normalizedGroupId) {
+      return null;
+    }
+    return getFreshOfficialTimeline(routeKey, requestedAt);
+  }
+
+  async function waitForOfficialTimeline(routeKey, requestedAt, groupId = "") {
     const deadline = performance.now() + OBSERVED_TIMELINE_WAIT_MS;
 
     while (performance.now() < deadline) {
-      const payload = getFreshOfficialTimeline(routeKey, requestedAt);
+      const payload = getFreshOfficialTimelineForRequest(routeKey, groupId, requestedAt);
       if (payload) {
         return payload;
       }
@@ -337,7 +414,12 @@
   async function fetchTimeline(query, routeKey, requestedAt = 0) {
     if (!query?.max_id) {
       const freshRequestedAt = Number(requestedAt) || 0;
-      const immediateOfficialPayload = getFreshOfficialTimeline(routeKey, freshRequestedAt);
+      const requestedGroupId = query?.list_id || query?.fid || query?.group_id || "";
+      const immediateOfficialPayload = getFreshOfficialTimelineForRequest(
+        routeKey,
+        requestedGroupId,
+        freshRequestedAt
+      );
       if (immediateOfficialPayload) {
         return {
           ok: true,
@@ -350,10 +432,11 @@
       }
 
       const resolvedRouteKey = resolveFeedRouteKey(routeKey);
-      const hasEndpointTemplate = observedTimelineEndpointByRoute.has(resolvedRouteKey);
+      const hasEndpointTemplate = observedTimelineEndpointByGroup.has(String(requestedGroupId))
+        || observedTimelineEndpointByRoute.has(resolvedRouteKey);
       const officialPayload = hasEndpointTemplate
         ? null
-        : await waitForOfficialTimeline(routeKey, freshRequestedAt);
+        : await waitForOfficialTimeline(routeKey, freshRequestedAt, requestedGroupId);
       if (officialPayload) {
         return {
           ok: true,

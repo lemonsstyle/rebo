@@ -73,7 +73,7 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
 
 ### 5.1 生效范围
 
-仅在 `https://weibo.com/` 和 `https://weibo.com/mygroups` 生效。页面路径与 `gid` 共同组成路由键，例如：
+仅在 `https://weibo.com/` 和 `https://weibo.com/mygroups` 生效。无分组时按页面路径区分首页与分组页；有分组时以规范化的 `gid` 组成路由键，例如：
 
 ```text
 /mygroups?gid=110005621270805
@@ -99,7 +99,7 @@ page-bridge.js ── fetch 同源微博接口 ──► 本地卡片墙 / 详�
 
 ### 6.1 接口策略
 
-桥接脚本会同时观察微博页面自己的 `fetch` 与 `XMLHttpRequest`，并按页面路由（路径加 `gid`）缓存首屏响应和请求模板。这样即使微博在不同分组中改用 `list_id`、`fid` 或 `group_id`，扩展也不会把一个分组的模板误用到另一个分组。已识别的时间线端点包括：
+桥接脚本会同时观察微博页面自己的 `fetch` 与 `XMLHttpRequest`，并按页面路由（路径加 `gid`）及请求中的分组 ID 缓存首屏响应和请求模板。这样即使微博切换分组时请求先于 URL 更新，或在不同分组中改用 `list_id`、`fid` 或 `group_id`，扩展也不会把一个分组的模板误用到另一个分组。已识别的时间线端点包括：
 
 ```text
 /ajax/feed/friendstimeline
@@ -243,7 +243,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 - 补页主要由位于墙底的 `IntersectionObserver` 触发，不再为每次页面滚动创建补页检测帧；
 - `MutationObserver`（挂在 `document.documentElement`，`childList: true, subtree: true`）只在新增节点本身或子树包含 `.vue-recycle-scroller`、`.woo-panel-left`、`.wbpro-side`、`div.scale` 时调用刷新（`mutationNeedsRefresh` 辅助函数）；
 - `readerGeneration` 在每次 `resetReader` 和 `unmountReaderSurface` 时递增，`loadTimeline` 在请求前捕获当前 generation，响应返回后校验是否仍匹配，不匹配则静默丢弃，防止切分组后旧数据回填；
-- 页面桥接会监听微博页面自身发出的 `fetch / XHR` 信息流响应，并按当前页面路由缓存首屏数据和请求模板；目前同时识别微博的 `/ajax/feed/friendstimeline` 与 `/ajax/feed/groupstimeline`，并兼容 `list_id`、`fid` 与 `group_id`。卡片墙优先使用这份官方响应；模板一旦可用也能立即发起同源请求，避免把读取器的加载时间全部交给观察窗口。缓存未及时出现时，才以 Performance 中与当前分组匹配的官方请求为模板；根路径“全部关注”则优先选择最近的 `friendstimeline` 请求。模板会保留微博页面所需的分组上下文（例如 `groupstimeline` 的 `fast_refresh`），仅清理旧的 `since_id / max_id` 游标；失败模板会被淘汰，若没有观察到完整官方请求则保持原版信息流，不会凭空拼出基础 URL 重试。重复点击当前分组也会清空 `readerMaxId` 后重新加载第一页，保持与微博原版一致的最新优先顺序；
+- 页面桥接会监听微博页面自身发出的 `fetch / XHR` 信息流响应，并按当前页面路由及请求中的分组 ID 缓存首屏数据和请求模板；目前同时识别微博的 `/ajax/feed/friendstimeline` 与 `/ajax/feed/groupstimeline`，并兼容 `list_id`、`fid` 与 `group_id`。卡片墙优先使用这份官方响应；模板一旦可用也能立即发起同源请求，避免把读取器的加载时间全部交给观察窗口。缓存未及时出现时，才以 Performance 中与当前分组匹配的官方请求为模板；根路径“全部关注”则优先选择最近的 `friendstimeline` 请求。模板会保留微博页面所需的分组上下文（例如 `groupstimeline` 的 `fast_refresh`），仅清理旧的 `since_id / max_id` 游标；失败模板会被淘汰，若没有观察到完整官方请求则保持原版信息流，不会凭空拼出基础 URL 重试。重复点击当前分组也会清空 `readerMaxId` 后重新加载第一页，保持与微博原版一致的最新优先顺序；
 - 首屏请求失败或返回空数组时会立即恢复微博原始信息流，不再保留一个隐藏源列表的空白卡片墙；
 - 原版虚拟列表会一直保留到读取器已经渲染出当前分组至少一张卡片后才隐藏；路由或分组在请求期间变化时，旧请求结果会因路由键不匹配被丢弃。
 - 桥接消息使用带版本的独立通道（当前为 `weibo-grid-reader-v4`）和内容脚本启动时生成的一次性 `BRIDGE_SESSION_ID`（格式：`${Date.now()}-${Math.random().toString(36).slice(2)}`）。`listenForBridgeResponses` 中的响应处理器严格校验 `bridgeSessionId` 匹配，页面上因扩展重新加载而遗留的同版本桥接脚本无法被新内容脚本接受，从而避免旧实例用过期缓存抢答首屏或补页请求。`hasValidExtensionContext()` 通过 `chrome?.runtime?.id` 检测扩展上下文是否有效，失效后所有桥接请求立即返回失败。

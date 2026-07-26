@@ -191,7 +191,14 @@
       if (url.origin !== window.location.origin || (url.pathname !== "/" && url.pathname !== "/mygroups")) {
         return "";
       }
-      return `${url.pathname}?gid=${url.searchParams.get("gid") || ""}`;
+      const groupId = url.searchParams.get("gid")
+        || url.searchParams.get("list_id")
+        || url.searchParams.get("fid")
+        || url.searchParams.get("group_id")
+        || "";
+      return groupId
+        ? `gid=${encodeURIComponent(groupId)}`
+        : `${url.pathname}?gid=`;
     } catch {
       return "";
     }
@@ -199,6 +206,39 @@
 
   function getReaderRouteKey() {
     return getReaderRouteKeyFromUrl(window.location.href);
+  }
+
+  function getReaderGroupIdFromUrl(value = window.location.href) {
+    try {
+      const url = new URL(value, window.location.href);
+      return url.searchParams.get("gid")
+        || url.searchParams.get("list_id")
+        || url.searchParams.get("fid")
+        || url.searchParams.get("group_id")
+        || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function getReaderRouteKeyFromElement(element) {
+    const link = element?.closest?.("a[href]");
+    const linkRouteKey = link ? getReaderRouteKeyFromUrl(link.href) : "";
+    const groupElement = element?.closest?.(
+      "[data-gid], [data-list-id], [data-list_id], [data-fid], [data-group-id], [data-group_id]"
+    );
+    if (!groupElement) {
+      return linkRouteKey;
+    }
+
+    const groupId = groupElement.getAttribute("data-gid")
+      || groupElement.getAttribute("data-list-id")
+      || groupElement.getAttribute("data-list_id")
+      || groupElement.getAttribute("data-fid")
+      || groupElement.getAttribute("data-group-id")
+      || groupElement.getAttribute("data-group_id")
+      || "";
+    return groupId ? `gid=${encodeURIComponent(groupId)}` : linkRouteKey;
   }
 
   function getExtensionRoot() {
@@ -789,7 +829,7 @@
 
   function getFeedQuery() {
     const url = new URL(window.location.href);
-    const groupId = url.searchParams.get("gid");
+    const groupId = getReaderGroupIdFromUrl(url);
     const query = {
       refresh: "4",
       count: "25"
@@ -2554,13 +2594,45 @@
     return text;
   }
 
-  function createDetailImageViewer(initialUrl, alt = "微博图片") {
+  function createDetailImageViewer(initialUrl, alt = "微博图片", navigation = {}) {
     const viewer = document.createElement("div");
     viewer.className = "weibo-grid-reader__detail-image-viewer";
     viewer.tabIndex = 0;
     viewer.setAttribute("role", "button");
     viewer.setAttribute("aria-label", "图片浏览区域，点击放大查看");
     viewer.title = "点击放大查看";
+    let lastPointerEvent = null;
+
+    const getImageZone = (event) => {
+      if (typeof navigation.onNavigate !== "function") {
+        return "zoom";
+      }
+
+      const rect = viewer.getBoundingClientRect();
+      if (!rect.height) {
+        return "zoom";
+      }
+
+      const relativeY = (event.clientY - rect.top) / rect.height;
+      if (relativeY <= 0.2 && navigation.canNavigate?.("previous") !== false) {
+        return "previous";
+      }
+      if (relativeY >= 0.8 && navigation.canNavigate?.("next") !== false) {
+        return "next";
+      }
+      return "zoom";
+    };
+
+    const updateImageZone = (event) => {
+      lastPointerEvent = event;
+      const zone = getImageZone(event);
+      viewer.dataset.imageZone = zone;
+      viewer.title = zone === "previous"
+        ? "点击查看上一张图片"
+        : zone === "next"
+          ? "点击查看下一张图片"
+          : "点击放大查看";
+    };
 
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__detail-full-image";
@@ -2587,8 +2659,20 @@
     viewer.addEventListener("click", (event) => {
       if (event.target === image) {
         viewer.focus({ preventScroll: true });
+        const zone = viewer.dataset.imageZone;
+        if ((zone === "previous" || zone === "next") && typeof navigation.onNavigate === "function") {
+          event.preventDefault();
+          navigation.onNavigate(zone);
+          return;
+        }
         openPreview();
       }
+    });
+    viewer.addEventListener("mousemove", updateImageZone);
+    viewer.addEventListener("mouseleave", () => {
+      lastPointerEvent = null;
+      viewer.dataset.imageZone = "zoom";
+      viewer.title = "点击放大查看";
     });
     viewer.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -2601,6 +2685,9 @@
     const setImage = (url, nextAlt = alt) => {
       image.alt = nextAlt;
       image.src = url;
+      if (lastPointerEvent) {
+        updateImageZone(lastPointerEvent);
+      }
     };
 
     setImage(initialUrl, alt);
@@ -2608,13 +2695,26 @@
   }
 
   function createDetailGallery(pictureUrls) {
-    const viewer = createDetailImageViewer(pictureUrls[0], "微博图片 1");
+    let selectedIndex = 0;
+    const viewer = createDetailImageViewer(pictureUrls[0], "微博图片 1", {
+      canNavigate: (direction) => direction === "previous"
+        ? selectedIndex > 0
+        : selectedIndex < pictureUrls.length - 1,
+      onNavigate: (direction) => {
+        const offset = direction === "previous" ? -1 : 1;
+        const nextIndex = selectedIndex + offset;
+        if (nextIndex >= 0 && nextIndex < pictureUrls.length) {
+          selectImage(nextIndex);
+        }
+      }
+    });
     const rail = document.createElement("nav");
     rail.className = "weibo-grid-reader__detail-thumbnail-rail";
     rail.setAttribute("aria-label", "微博图片缩略图");
     const buttons = [];
 
     const selectImage = (index) => {
+      selectedIndex = index;
       viewer.setImage(pictureUrls[index], `微博图片 ${index + 1}`);
       buttons.forEach((button, buttonIndex) => {
         button.classList.toggle("weibo-grid-reader__detail-thumbnail--active", buttonIndex === index);
@@ -4410,8 +4510,7 @@
     }, { capture: true });
     document.addEventListener("click", (event) => {
       const origin = event.target instanceof Element ? event.target : null;
-      const link = origin?.closest("a[href]");
-      const targetRouteKey = link ? getReaderRouteKeyFromUrl(link.href) : "";
+      const targetRouteKey = getReaderRouteKeyFromElement(origin);
       if (!targetRouteKey) {
         return;
       }

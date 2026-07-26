@@ -587,6 +587,16 @@ html.weibo-grid-reader-detail-open {
   width: 100%;
 }
 
+.weibo-grid-reader__detail-image-viewer[data-image-zone="previous"],
+.weibo-grid-reader__detail-image-viewer[data-image-zone="previous"] .weibo-grid-reader__detail-full-image {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 5 10h5v11h4V10h5z' fill='%23252525' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, n-resize;
+}
+
+.weibo-grid-reader__detail-image-viewer[data-image-zone="next"],
+.weibo-grid-reader__detail-image-viewer[data-image-zone="next"] .weibo-grid-reader__detail-full-image {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='m12 21 7-7h-5V3h-4v11H5z' fill='%23252525' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, s-resize;
+}
+
 .weibo-grid-reader__detail-full-image {
   cursor: zoom-in;
   display: block;
