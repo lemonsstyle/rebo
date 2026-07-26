@@ -3,6 +3,23 @@
   "name": "微博网格阅读器",
   "version": "0.1.2",
   "description": "为微博首页信息流提供宽屏阅读、右侧抽屉和虚拟列表兼容的多列布局。",
+  "icons": {
+    "16": "icon/16.png",
+    "24": "icon/24.png",
+    "32": "icon/32.png",
+    "48": "icon/48.png",
+    "128": "icon/128.png"
+  },
+  "action": {
+    "default_title": "打开 rebo 阅读器",
+    "default_icon": {
+      "16": "icon/16.png",
+      "24": "icon/24.png",
+      "32": "icon/32.png",
+      "48": "icon/48.png",
+      "128": "icon/128.png"
+    }
+  },
   "permissions": ["storage"],
   "host_permissions": ["https://weibo.com/*", "https://www.weibo.com/*"],
   "content_scripts": [
@@ -15,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["page-bridge.js"],
+      "resources": ["page-bridge.js", "icon/16.png", "icon/24.png", "icon/32.png", "icon/48.png", "icon/128.png"],
       "matches": ["https://weibo.com/*", "https://www.weibo.com/*"]
     }
   ]

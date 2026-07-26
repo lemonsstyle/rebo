@@ -7,6 +7,7 @@
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
   const SETTINGS_KEY = "weiboGridReaderSettings";
+  const BUTTON_ICON_PATH = "icon/32.png";
   const DEFAULT_SETTINGS = Object.freeze({
     readerEnabled: true,
     columnCount: 2
@@ -14,7 +15,7 @@
   const DENSITY_OPTIONS = Object.freeze({
     2: { label: "稀疏" },
     3: { label: "适中" },
-    4: { label: "密集" }
+    4: { label: "紧凑" }
   });
   const VIDEO_QUALITY_LEVELS = Object.freeze({
     original: { key: "original", label: "原画", rank: 5 },
@@ -858,7 +859,7 @@
   }
 
   function getProfileUrl(user) {
-    const userId = user?.idstr || user?.id;
+    const userId = user?.idstr || user?.id_str || user?.id || user?.uid;
     return userId ? `https://weibo.com/u/${encodeURIComponent(userId)}` : "";
   }
 
@@ -1851,38 +1852,87 @@
     return preview;
   }
 
-  function appendPlainTextWithLinks(container, value, renderCommentImages = false, comment = null) {
+  function getMentionProfiles(source) {
+    const mentions = source?.user_mentions || source?.userMentions || [];
+    if (!Array.isArray(mentions)) {
+      return new Map();
+    }
+
+    const profiles = new Map();
+    for (const mention of mentions) {
+      const screenName = String(mention?.screen_name || mention?.name || "").trim();
+      if (!screenName) {
+        continue;
+      }
+
+      const profileUrl = getProfileUrl(mention) || `https://weibo.com/n/${encodeURIComponent(screenName)}`;
+      profiles.set(screenName.toLocaleLowerCase(), profileUrl);
+    }
+    return profiles;
+  }
+
+  function getMentionHref(name, mentionProfiles) {
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) {
+      return "";
+    }
+
+    return mentionProfiles.get(normalizedName.toLocaleLowerCase())
+      || `https://weibo.com/n/${encodeURIComponent(normalizedName)}`;
+  }
+
+  function appendPlainTextWithLinks(
+    container,
+    value,
+    renderCommentImages = false,
+    comment = null,
+    mentionSource = null
+  ) {
     const source = String(value || "");
-    const urlPattern = /https?:\/\/[^\s<]+/g;
+    const mentionProfiles = getMentionProfiles(mentionSource);
+    const tokenPattern = /https?:\/\/[^\s<]+|@[^\s@：:，,。.!！？!?、；;（）()[\]{}"'<>]+/g;
     let previousEnd = 0;
 
-    for (const match of source.matchAll(urlPattern)) {
+    for (const match of source.matchAll(tokenPattern)) {
       const matchIndex = match.index || 0;
       container.append(source.slice(previousEnd, matchIndex));
-      const url = getSafeLinkHref(match[0]);
+      const token = match[0];
+      const url = token.startsWith("http") ? getSafeLinkHref(token) : "";
       if (url && renderCommentImages && isWeiboImageLink(url)) {
         container.append(createCommentImagePreview(url, comment));
+      } else if (url) {
+        container.append(createRichLink(url, token));
+      } else if (token.startsWith("@")) {
+        const mentionName = token.slice(1);
+        container.append(createRichLink(getMentionHref(mentionName, mentionProfiles), token));
       } else {
-        container.append(url ? createRichLink(url, match[0]) : match[0]);
+        container.append(token);
       }
-      previousEnd = matchIndex + match[0].length;
+      previousEnd = matchIndex + token.length;
     }
 
     container.append(source.slice(previousEnd));
   }
 
-  function appendRichStatusText(container, status, linkifyText = false, renderCommentImages = false, comment = null) {
+  function appendRichStatusText(
+    container,
+    status,
+    linkifyText = false,
+    renderCommentImages = false,
+    comment = null,
+    mentionSource = status
+  ) {
     const template = document.createElement("template");
     const source = status.text || status.text_raw || "";
     const hideVideoLink = Boolean(getVideoMedia(status));
     template.innerHTML = source;
 
-    const appendNodes = (nodes, target) => {
+    const appendNodes = (nodes, target, shouldLinkify = linkifyText) => {
       for (const node of nodes) {
         if (node.nodeType === Node.TEXT_NODE) {
           const text = hideVideoLink ? node.textContent.replace(/https?:\/\/\S+/g, "") : node.textContent;
-          if (linkifyText) {
-            appendPlainTextWithLinks(target, text, renderCommentImages, comment);
+          if (shouldLinkify) {
+            appendPlainTextWithLinks(target, text, renderCommentImages, comment, mentionSource);
           } else {
             target.append(text);
           }
@@ -1921,7 +1971,7 @@
             }
             const link = createRichLink(href);
             target.append(link);
-            appendNodes(node.childNodes, link);
+            appendNodes(node.childNodes, link, false);
             continue;
           }
         }
@@ -1937,7 +1987,7 @@
     appendRichStatusText(container, {
       text: comment.text || comment.text_raw || "",
       page_info: null
-    }, true, true, comment);
+    }, true, true, comment, comment);
   }
 
   function populateStatusText(container, status, preserveLayout = false) {
@@ -1946,7 +1996,7 @@
     if ((preserveLayout && status.text) || hasRichStatusText(status)) {
       appendRichStatusText(container, status, true);
     } else {
-      appendPlainTextWithLinks(container, displayText || "转发微博");
+      appendPlainTextWithLinks(container, displayText || "转发微博", false, null, status);
     }
   }
 
@@ -3144,7 +3194,7 @@
     if (hasRichStatusText(comment)) {
       appendRichCommentText(text, comment);
     } else {
-      appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true, comment);
+      appendPlainTextWithLinks(text, comment.text_raw || plainText(comment.text), true, comment, comment);
     }
     if (isPostAuthorReply) {
       const authorBadge = document.createElement("span");
@@ -4114,10 +4164,7 @@
     root.id = ROOT_ID;
     root.innerHTML = `
       <button class="weibo-grid-reader__button" type="button" data-reader-button aria-label="打开 rebo 阅读器" aria-expanded="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2.75 12s3.25-5.25 9.25-5.25S21.25 12 21.25 12 18 17.25 12 17.25 2.75 12 2.75 12Z"></path>
-          <circle cx="12" cy="12" r="2.8"></circle>
-        </svg>
+        <img class="weibo-grid-reader__button-icon" data-reader-icon alt="">
       </button>
       <aside class="weibo-grid-reader__drawer" data-reader-panel aria-hidden="true" aria-label="微博阅读器设置">
         <header class="weibo-grid-reader__header">
@@ -4138,14 +4185,14 @@
           </label>
           <div class="weibo-grid-reader__setting weibo-grid-reader__column-setting">
             <span class="weibo-grid-reader__setting-copy">
-              <strong>信息密度</strong>
+              <strong>信息流列数</strong>
             </span>
             <div class="weibo-grid-reader__density-control">
-              <input class="weibo-grid-reader__density-slider" type="range" min="2" max="4" step="1" value="2" data-density-slider aria-label="选择信息密度">
+              <input class="weibo-grid-reader__density-slider" type="range" min="2" max="4" step="1" value="2" data-density-slider aria-label="选择信息流列数">
               <div class="weibo-grid-reader__density-labels" aria-hidden="true">
                 <span data-density-label="2">稀疏</span>
                 <span data-density-label="3">适中</span>
-                <span data-density-label="4">密集</span>
+                <span data-density-label="4">紧凑</span>
               </div>
             </div>
           </div>
@@ -4154,6 +4201,15 @@
     `;
 
     document.documentElement.appendChild(root);
+
+    const buttonIcon = root.querySelector("[data-reader-icon]");
+    if (buttonIcon) {
+      try {
+        buttonIcon.src = chrome.runtime.getURL(BUTTON_ICON_PATH);
+      } catch {
+        buttonIcon.remove();
+      }
+    }
 
     root.querySelector("[data-reader-button]")?.addEventListener("click", () => {
       setDrawerOpen(!drawerOpen);

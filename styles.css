@@ -37,9 +37,10 @@
   transform: scale(1.06);
 }
 
-.weibo-grid-reader__button svg {
-  height: 22px;
-  width: 22px;
+.weibo-grid-reader__button-icon {
+  height: 28px;
+  object-fit: contain;
+  width: 28px;
 }
 
 .weibo-grid-reader__drawer {
