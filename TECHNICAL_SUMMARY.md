@@ -243,6 +243,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 - 补页主要由位于墙底的 `IntersectionObserver` 触发，不再为每次页面滚动创建补页检测帧；
 - `MutationObserver`（挂在 `document.documentElement`，`childList: true, subtree: true`）只在新增节点本身或子树包含 `.vue-recycle-scroller`、`.woo-panel-left`、`.wbpro-side`、`div.scale` 时调用刷新（`mutationNeedsRefresh` 辅助函数）；
 - 左下角“使用新布局”开关采用克制的暗化缩放转场：右侧内容区先降低亮度并轻微缩小，读取器 surface 真正完成挂载或卸载后再柔和恢复；左侧关注分组栏不参与动画。开启时会优先复用当前分组已经被微博官方页面确认过的首屏数据，不再因点击时刻较新而错误丢弃这份可用数据；明确首屏失败会立即回滚，仍在请求中的情况才继续等待，避免出现“开关已开启但仍显示官方布局”的假切换。`prefers-reduced-motion: reduce` 下会直接完成同一套状态事务；
+- 信息流列数滑块使用 `change` 事件触发同一套暗化缩放转场，在中点更新 `data-columns` 和 masonry 列布局，避免拖动过程中的连续重排；左下角按钮使用与 `icon/32.png` 原尺寸匹配的 `32px` 图标和同色背景，减少缩放模糊与内外色差；
 - `readerGeneration` 在每次 `resetReader` 和 `unmountReaderSurface` 时递增，`loadTimeline` 在请求前捕获当前 generation，响应返回后校验是否仍匹配，不匹配则静默丢弃，防止切分组后旧数据回填；
 - 页面桥接会监听微博页面自身发出的 `fetch / XHR` 信息流响应，并按当前页面路由及请求中的分组 ID 缓存首屏数据和请求模板；目前同时识别微博的 `/ajax/feed/friendstimeline` 与 `/ajax/feed/groupstimeline`，并兼容 `list_id`、`fid` 与 `group_id`。卡片墙优先使用这份官方响应；模板一旦可用也能立即发起同源请求，避免把读取器的加载时间全部交给观察窗口。缓存未及时出现时，才以 Performance 中与当前分组匹配的官方请求为模板；根路径“全部关注”则优先选择最近的 `friendstimeline` 请求。模板会保留微博页面所需的分组上下文（例如 `groupstimeline` 的 `fast_refresh`），仅清理旧的 `since_id / max_id` 游标；失败模板会被淘汰，若没有观察到完整官方请求则保持原版信息流，不会凭空拼出基础 URL 重试。重复点击当前分组也会清空 `readerMaxId` 后重新加载第一页，保持与微博原版一致的最新优先顺序；
 - 首屏请求失败或返回空数组时会立即恢复微博原始信息流，不再保留一个隐藏源列表的空白卡片墙；

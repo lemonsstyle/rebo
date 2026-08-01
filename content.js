@@ -302,7 +302,7 @@
     const density = getDensityOption(settings.columnCount);
     if (densitySlider) {
       densitySlider.value = String(settings.columnCount);
-      densitySlider.disabled = !settings.readerEnabled;
+      densitySlider.disabled = !settings.readerEnabled || layoutTransitionInProgress;
       densitySlider.setAttribute("aria-valuetext", density.label);
       densitySlider.style.setProperty(
         "--weibo-grid-reader-density-progress",
@@ -4426,6 +4426,49 @@
     }
   }
 
+  async function setColumnCountWithTransition(nextColumnCount, densitySlider) {
+    if (
+      layoutTransitionInProgress
+      || nextColumnCount === settings.columnCount
+      || !settings.readerEnabled
+      || !isFeedRoute()
+    ) {
+      updateControlState();
+      return;
+    }
+
+    const previousColumnCount = settings.columnCount;
+    const applyLayout = async () => {
+      settings.columnCount = nextColumnCount;
+      getReaderSurface()?.setAttribute("data-columns", String(nextColumnCount));
+      saveSettings();
+      updateControlState();
+      scheduleMasonryLayout();
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      return true;
+    };
+
+    layoutTransitionInProgress = true;
+    densitySlider.disabled = true;
+    const root = getExtensionRoot();
+    root?.classList.add("weibo-grid-reader--transitioning");
+    currentPageLayout?.setAttribute("aria-busy", "true");
+    setDrawerOpen(false);
+
+    try {
+      await runLayoutTransition(applyLayout);
+    } catch {
+      settings.columnCount = previousColumnCount;
+      getReaderSurface()?.setAttribute("data-columns", String(previousColumnCount));
+      saveSettings();
+    } finally {
+      layoutTransitionInProgress = false;
+      root?.classList.remove("weibo-grid-reader--transitioning");
+      currentPageLayout?.removeAttribute("aria-busy");
+      updateControlState();
+    }
+  }
+
   function setDrawerOpen(nextDrawerOpen) {
     drawerOpen = nextDrawerOpen;
     updatePageClasses();
@@ -4500,17 +4543,13 @@
       void setReaderEnabledWithTransition(event.currentTarget.checked, event.currentTarget);
     });
 
-    root.querySelector("[data-density-slider]")?.addEventListener("input", (event) => {
+    root.querySelector("[data-density-slider]")?.addEventListener("change", (event) => {
       const nextColumnCount = Number(event.currentTarget.value);
       if (![2, 3, 4].includes(nextColumnCount)) {
         return;
       }
 
-      settings.columnCount = nextColumnCount;
-      getReaderSurface()?.setAttribute("data-columns", String(nextColumnCount));
-      saveSettings();
-      updateControlState();
-      scheduleMasonryLayout();
+      void setColumnCountWithTransition(nextColumnCount, event.currentTarget);
     });
   }
 
