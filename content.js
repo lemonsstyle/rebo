@@ -6,7 +6,6 @@
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
-  const LAYOUT_TRANSITION_ID = "weibo-grid-reader-layout-transition";
   const SETTINGS_KEY = "weiboGridReaderSettings";
   const BUTTON_ICON_PATH = "icon/32.png";
   const DEFAULT_SETTINGS = Object.freeze({
@@ -30,8 +29,8 @@
   const DETAIL_IMAGE_PREVIEW_ZOOM_STEP = 0.25;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
-  const LAYOUT_TRANSITION_DURATION_MS = 900;
-  const LAYOUT_TRANSITION_SWITCH_PROGRESS = 0.44;
+  const LAYOUT_TRANSITION_OUT_DURATION_MS = 320;
+  const LAYOUT_TRANSITION_IN_DURATION_MS = 440;
   const LAYOUT_STATE_SETTLE_TIMEOUT_MS = 8500;
   // 评论行的转发/评论/点赞图标簇固定挂在该评论自己的头部一行（与昵称同一行，
   // 靠右对齐），鼠标悬停这条评论行的任意位置后短暂延迟才提亮为完全可交互，
@@ -4297,112 +4296,6 @@
     }
   }
 
-  function getLayoutTransitionBounds() {
-    const viewportWidth = Math.max(1, window.innerWidth);
-    const viewportHeight = Math.max(1, window.innerHeight);
-    const navigationRect = currentNavigationPanel?.getBoundingClientRect();
-    const feedRect = (currentFeedShell || findFeedShell())?.getBoundingClientRect();
-    const composerRect = currentComposerPanel?.getBoundingClientRect();
-    const inferredLeft = navigationRect?.width
-      ? navigationRect.right + 12
-      : feedRect?.left || Math.min(240, viewportWidth * 0.18);
-    const inferredTop = composerRect?.height
-      ? composerRect.top - 8
-      : feedRect?.top || 52;
-    const left = Math.min(viewportWidth - 1, Math.max(0, inferredLeft));
-    const top = Math.min(viewportHeight - 1, Math.max(0, inferredTop));
-
-    return {
-      left,
-      top,
-      width: Math.max(1, viewportWidth - left - 16),
-      height: Math.max(1, viewportHeight - top)
-    };
-  }
-
-  function createLayoutTransitionParticles(bounds) {
-    const area = bounds.width * bounds.height;
-    const particleCount = Math.min(260, Math.max(150, Math.round(area / 5200)));
-    const palette = ["#657074", "#899295", "#adb5b6", "#cbd1d0", "#e6e9e6", "#d89154"];
-    const particles = [];
-
-    for (let index = 0; index < particleCount; index += 1) {
-      const x = bounds.left + Math.random() * bounds.width;
-      const y = bounds.top + Math.random() * bounds.height;
-      const travelOrder = ((x - bounds.left) / bounds.width) * 0.74
-        + ((bounds.top + bounds.height - y) / bounds.height) * 0.26;
-      const isFlake = Math.random() > 0.88;
-      const orangeAccent = Math.random() > 0.965;
-      particles.push({
-        x,
-        y,
-        driftX: 68 + Math.random() * 104,
-        driftY: -24 - Math.random() * 62,
-        delay: Math.min(0.62, 0.02 + travelOrder * 0.42 + Math.random() * 0.1),
-        opacity: 0.16 + Math.random() * 0.32,
-        rotation: -0.7 + Math.random() * 1.4,
-        size: 0.42 + Math.random() * (isFlake ? 1.36 : 0.82),
-        length: isFlake ? 1.8 + Math.random() * 1.8 : 1,
-        isFlake,
-        turbulence: -5 + Math.random() * 10,
-        seed: Math.random() * Math.PI * 2,
-        color: orangeAccent ? palette[palette.length - 1] : palette[Math.floor(Math.random() * (palette.length - 1))]
-      });
-    }
-
-    return particles;
-  }
-
-  function createLayoutTransitionCanvas() {
-    document.getElementById(LAYOUT_TRANSITION_ID)?.remove();
-    const canvas = document.createElement("canvas");
-    canvas.id = LAYOUT_TRANSITION_ID;
-    canvas.setAttribute("aria-hidden", "true");
-    const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-    canvas.width = Math.round(window.innerWidth * pixelRatio);
-    canvas.height = Math.round(window.innerHeight * pixelRatio);
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return null;
-    }
-    context.scale(pixelRatio, pixelRatio);
-    document.documentElement.appendChild(canvas);
-    return { canvas, context };
-  }
-
-  function drawLayoutTransitionParticle(context, particle, progress, reassembling) {
-    const phaseDelay = reassembling ? particle.delay * 0.7 : particle.delay;
-    const localProgress = Math.min(1, Math.max(0, (progress - phaseDelay) / (1 - phaseDelay)));
-    if (localProgress <= 0 || localProgress >= 1) {
-      return;
-    }
-
-    const easedProgress = reassembling
-      ? 1 - ((1 - localProgress) ** 3)
-      : 1 - ((1 - localProgress) ** 2.4);
-    const remainingDistance = reassembling ? 1 - easedProgress : easedProgress;
-    const driftCurve = remainingDistance ** 1.15;
-    const flutter = Math.sin(localProgress * Math.PI * 2 + particle.seed) * particle.turbulence * localProgress;
-    const x = particle.x + particle.driftX * driftCurve + flutter;
-    const y = particle.y + particle.driftY * driftCurve + flutter * 0.34;
-    const opacity = Math.sin(localProgress * Math.PI) * particle.opacity;
-    const size = particle.size * (reassembling ? 0.68 + easedProgress * 0.32 : 0.82 + easedProgress * 0.28);
-
-    context.save();
-    context.globalAlpha = opacity;
-    context.fillStyle = particle.color;
-    context.translate(x, y);
-    context.rotate(particle.rotation + remainingDistance * 0.48);
-    if (particle.isFlake) {
-      context.fillRect(-size * particle.length / 2, -size / 2, size * particle.length, size);
-    } else {
-      context.beginPath();
-      context.arc(0, 0, size / 2, 0, Math.PI * 2);
-      context.fill();
-    }
-    context.restore();
-  }
-
   function isReaderLayoutStateApplied(enabled) {
     const surface = getReaderSurface();
     const scroller = findScroller();
@@ -4479,99 +4372,27 @@
     return false;
   }
 
-  function runLayoutParticleTransition(applyLayout) {
-    return new Promise((resolve) => {
-      const tryApplyLayout = async () => {
-        try {
-          return await applyLayout() !== false;
-        } catch {
-          return false;
-        }
-      };
-      const canvasState = createLayoutTransitionCanvas();
-      if (!canvasState) {
-        void tryApplyLayout().then(resolve);
-        return;
+  async function runLayoutTransition(applyLayout) {
+    const root = document.documentElement;
+    const tryApplyLayout = async () => {
+      try {
+        return await applyLayout() !== false;
+      } catch {
+        return false;
       }
+    };
 
-      const root = document.documentElement;
-      const particles = createLayoutTransitionParticles(getLayoutTransitionBounds());
-      const outgoingDuration = LAYOUT_TRANSITION_DURATION_MS * LAYOUT_TRANSITION_SWITCH_PROGRESS;
-      const incomingDuration = LAYOUT_TRANSITION_DURATION_MS - outgoingDuration;
-      const outgoingStartedAt = performance.now();
-      let layoutSwitchStarted = false;
-      let layoutSwitchSettled = false;
-      let layoutSwitchSucceeded = false;
-      let layoutSwitchStartedAt = 0;
-      let incomingStartedAt = 0;
-
-      root.classList.add("weibo-grid-reader-layout-transitioning", "weibo-grid-reader-layout-transition-out");
-
-      const finish = (succeeded) => {
-        root.classList.remove(
-          "weibo-grid-reader-layout-transitioning",
-          "weibo-grid-reader-layout-transition-out",
-          "weibo-grid-reader-layout-transition-in"
-        );
-        canvasState.canvas.remove();
-        resolve(succeeded);
-      };
-
-      const settleLayoutSwitch = async () => {
-        layoutSwitchSucceeded = await tryApplyLayout();
-        layoutSwitchSettled = true;
-      };
-
-      const drawFrame = (timestamp) => {
-        canvasState.context.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-        if (!layoutSwitchStarted) {
-          const outgoingProgress = Math.min(1, (timestamp - outgoingStartedAt) / outgoingDuration);
-          for (const particle of particles) {
-            drawLayoutTransitionParticle(canvasState.context, particle, outgoingProgress, false);
-          }
-
-          if (outgoingProgress < 1) {
-            window.requestAnimationFrame(drawFrame);
-            return;
-          }
-
-          layoutSwitchStarted = true;
-          layoutSwitchStartedAt = timestamp;
-          void settleLayoutSwitch();
-          window.requestAnimationFrame(drawFrame);
-          return;
-        }
-
-        if (!layoutSwitchSettled) {
-          const waitingPulse = 0.72 + Math.sin((timestamp - layoutSwitchStartedAt) / 180) * 0.04;
-          for (const particle of particles) {
-            drawLayoutTransitionParticle(canvasState.context, particle, waitingPulse, false);
-          }
-          window.requestAnimationFrame(drawFrame);
-          return;
-        }
-
-        if (!incomingStartedAt) {
-          incomingStartedAt = timestamp;
-          root.classList.remove("weibo-grid-reader-layout-transition-out");
-          root.classList.add("weibo-grid-reader-layout-transition-in");
-        }
-
-        const incomingProgress = Math.min(1, (timestamp - incomingStartedAt) / incomingDuration);
-        for (const particle of particles) {
-          drawLayoutTransitionParticle(canvasState.context, particle, incomingProgress, true);
-        }
-
-        if (incomingProgress < 1) {
-          window.requestAnimationFrame(drawFrame);
-          return;
-        }
-        finish(layoutSwitchSucceeded);
-      };
-
-      window.requestAnimationFrame(drawFrame);
-    });
+    root.classList.add("weibo-grid-reader-layout-transitioning", "weibo-grid-reader-layout-transition-out");
+    await new Promise((resolve) => window.setTimeout(resolve, LAYOUT_TRANSITION_OUT_DURATION_MS));
+    const layoutApplied = await tryApplyLayout();
+    root.classList.remove("weibo-grid-reader-layout-transition-out");
+    root.classList.add("weibo-grid-reader-layout-transition-in");
+    await new Promise((resolve) => window.setTimeout(resolve, LAYOUT_TRANSITION_IN_DURATION_MS));
+    root.classList.remove(
+      "weibo-grid-reader-layout-transitioning",
+      "weibo-grid-reader-layout-transition-in"
+    );
+    return layoutApplied;
   }
 
   async function setReaderEnabledWithTransition(nextEnabled, readerToggle) {
@@ -4595,7 +4416,7 @@
       if (reduceMotion || !isFeedRoute()) {
         await applyLayout();
       } else {
-        await runLayoutParticleTransition(applyLayout);
+        await runLayoutTransition(applyLayout);
       }
     } finally {
       layoutTransitionInProgress = false;
