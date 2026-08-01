@@ -6,6 +6,7 @@
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
+  const LAYOUT_TRANSITION_ID = "weibo-grid-reader-layout-transition";
   const SETTINGS_KEY = "weiboGridReaderSettings";
   const BUTTON_ICON_PATH = "icon/32.png";
   const DEFAULT_SETTINGS = Object.freeze({
@@ -29,6 +30,9 @@
   const DETAIL_IMAGE_PREVIEW_ZOOM_STEP = 0.25;
   const MAX_CONSECUTIVE_DUPLICATE_PAGES = 3;
   const MAX_AUTOMATIC_LOAD_RETRIES = 3;
+  const LAYOUT_TRANSITION_DURATION_MS = 900;
+  const LAYOUT_TRANSITION_SWITCH_PROGRESS = 0.44;
+  const LAYOUT_STATE_SETTLE_TIMEOUT_MS = 8500;
   // 评论行的转发/评论/点赞图标簇固定挂在该评论自己的头部一行（与昵称同一行，
   // 靠右对齐），鼠标悬停这条评论行的任意位置后短暂延迟才提亮为完全可交互，
   // 延迟只用于防止鼠标划过列表时图标到处闪烁，因此取一个几乎无感知的短值，
@@ -121,6 +125,7 @@
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
+  let layoutTransitionInProgress = false;
   let bridgeReady = false;
   let currentFeedShell = null;
   let currentNavigationPanel = null;
@@ -139,6 +144,8 @@
   let readerRetryAttempt = 0;
   let readerSelectionRouteKey = "";
   let readerSelectionStartedAt = 0;
+  let readerWarmStartRouteKey = "";
+  let readerActivationFailed = false;
   let routeSyncTimer = 0;
   let refreshTimer = null;
   let masonryFrame = 0;
@@ -287,7 +294,10 @@
     panel?.setAttribute("aria-hidden", String(!drawerOpen));
 
     if (readerToggle) {
-      readerToggle.checked = settings.readerEnabled;
+      if (!layoutTransitionInProgress) {
+        readerToggle.checked = settings.readerEnabled;
+      }
+      readerToggle.disabled = layoutTransitionInProgress;
     }
 
     const density = getDensityOption(settings.columnCount);
@@ -702,6 +712,7 @@
     scroller.classList.add("weibo-grid-reader-source-hidden");
     mountedScroller = scroller;
     readerActive = true;
+    readerActivationFailed = false;
     updatePageClasses();
     scheduleLoadMore();
     return true;
@@ -807,6 +818,8 @@
     deactivateReaderSurface();
     mountedScroller = null;
     readerRouteKey = "";
+    readerWarmStartRouteKey = "";
+    readerActivationFailed = false;
     readerLoading = false;
     readerExhausted = false;
     readerMaxId = "";
@@ -4082,6 +4095,7 @@
   }
 
   function restoreNativeFeed() {
+    readerActivationFailed = true;
     readerFailedRouteKey = readerRouteKey;
     deactivateReaderSurface();
     scheduleReaderRetry();
@@ -4093,6 +4107,7 @@
     }
 
     if (!bridgeReady) {
+      readerActivationFailed = true;
       return;
     }
 
@@ -4102,9 +4117,12 @@
     }
     const generation = readerGeneration;
     const routeKey = readerRouteKey;
-    const requestedAt = readerSelectionRouteKey === routeKey
-      ? readerSelectionStartedAt
-      : Date.now();
+    const canUseWarmStartTimeline = !readerMaxId && readerWarmStartRouteKey === routeKey;
+    const requestedAt = canUseWarmStartTimeline
+      ? 0
+      : readerSelectionRouteKey === routeKey
+        ? readerSelectionStartedAt
+        : Date.now();
     const result = await bridgeRequest("fetch-timeline", {
       query: getFeedQuery(),
       routeKey,
@@ -4182,6 +4200,7 @@
       activateReaderSurface();
     }
     readerLoading = false;
+    readerActivationFailed = false;
     readerExhausted = false;
     readerMaxId = "";
     readerDuplicatePageCount = 0;
@@ -4278,6 +4297,304 @@
     }
   }
 
+  function getLayoutTransitionBounds() {
+    const viewportWidth = Math.max(1, window.innerWidth);
+    const viewportHeight = Math.max(1, window.innerHeight);
+    const navigationRect = currentNavigationPanel?.getBoundingClientRect();
+    const feedRect = (currentFeedShell || findFeedShell())?.getBoundingClientRect();
+    const composerRect = currentComposerPanel?.getBoundingClientRect();
+    const inferredLeft = navigationRect?.width
+      ? navigationRect.right + 12
+      : feedRect?.left || Math.min(240, viewportWidth * 0.18);
+    const inferredTop = composerRect?.height
+      ? composerRect.top - 8
+      : feedRect?.top || 52;
+    const left = Math.min(viewportWidth - 1, Math.max(0, inferredLeft));
+    const top = Math.min(viewportHeight - 1, Math.max(0, inferredTop));
+
+    return {
+      left,
+      top,
+      width: Math.max(1, viewportWidth - left - 16),
+      height: Math.max(1, viewportHeight - top)
+    };
+  }
+
+  function createLayoutTransitionParticles(bounds) {
+    const area = bounds.width * bounds.height;
+    const particleCount = Math.min(92, Math.max(42, Math.round(area / 12500)));
+    const aspectRatio = bounds.width / Math.max(1, bounds.height);
+    const columnCount = Math.max(1, Math.ceil(Math.sqrt(particleCount * aspectRatio)));
+    const rowCount = Math.ceil(particleCount / columnCount);
+    const cellWidth = bounds.width / columnCount;
+    const cellHeight = bounds.height / rowCount;
+    const palette = ["#50565b", "#767d82", "#aab0b4", "#d8dcdf", "#f4f5f6", "#ff8200"];
+    const particles = [];
+
+    for (let index = 0; index < particleCount; index += 1) {
+      const column = index % columnCount;
+      const row = Math.floor(index / columnCount);
+      const orangeAccent = Math.random() > 0.9;
+      particles.push({
+        x: bounds.left + (column + 0.18 + Math.random() * 0.64) * cellWidth,
+        y: bounds.top + (row + 0.18 + Math.random() * 0.64) * cellHeight,
+        driftX: 34 + Math.random() * 78,
+        driftY: -42 + Math.random() * 68,
+        delay: Math.random() * 0.18,
+        opacity: 0.28 + Math.random() * 0.48,
+        rotation: -0.45 + Math.random() * 0.9,
+        size: 1.2 + Math.random() * 2.8,
+        color: orangeAccent ? palette[palette.length - 1] : palette[Math.floor(Math.random() * (palette.length - 1))]
+      });
+    }
+
+    return particles;
+  }
+
+  function createLayoutTransitionCanvas() {
+    document.getElementById(LAYOUT_TRANSITION_ID)?.remove();
+    const canvas = document.createElement("canvas");
+    canvas.id = LAYOUT_TRANSITION_ID;
+    canvas.setAttribute("aria-hidden", "true");
+    const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    canvas.width = Math.round(window.innerWidth * pixelRatio);
+    canvas.height = Math.round(window.innerHeight * pixelRatio);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+    context.scale(pixelRatio, pixelRatio);
+    document.documentElement.appendChild(canvas);
+    return { canvas, context };
+  }
+
+  function drawLayoutTransitionParticle(context, particle, progress, reassembling) {
+    const phaseDelay = reassembling ? particle.delay * 0.7 : particle.delay;
+    const localProgress = Math.min(1, Math.max(0, (progress - phaseDelay) / (1 - phaseDelay)));
+    if (localProgress <= 0 || localProgress >= 1) {
+      return;
+    }
+
+    const easedProgress = reassembling
+      ? 1 - ((1 - localProgress) ** 3)
+      : localProgress ** 2;
+    const remainingDistance = reassembling ? 1 - easedProgress : easedProgress;
+    const x = particle.x + particle.driftX * remainingDistance;
+    const y = particle.y + particle.driftY * remainingDistance;
+    const opacity = Math.sin(localProgress * Math.PI) * particle.opacity;
+    const size = particle.size * (reassembling ? 0.75 + easedProgress * 0.25 : 1 + easedProgress * 0.35);
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.fillStyle = particle.color;
+    context.translate(x, y);
+    context.rotate(particle.rotation * remainingDistance);
+    context.fillRect(-size / 2, -size / 2, size * 1.45, size);
+    context.restore();
+  }
+
+  function isReaderLayoutStateApplied(enabled) {
+    const surface = getReaderSurface();
+    const scroller = findScroller();
+    const activeClassApplied = document.documentElement.classList.contains("weibo-grid-reader-active");
+
+    if (enabled) {
+      return settings.readerEnabled
+        && readerActive
+        && Boolean(surface && !surface.hidden)
+        && Boolean(scroller?.classList.contains("weibo-grid-reader-source-hidden"))
+        && activeClassApplied;
+    }
+
+    return !settings.readerEnabled
+      && !readerActive
+      && (!surface || surface.hidden)
+      && !scroller?.classList.contains("weibo-grid-reader-source-hidden")
+      && !activeClassApplied;
+  }
+
+  function waitForReaderLayoutState(enabled) {
+    if (isReaderLayoutStateApplied(enabled)) {
+      return Promise.resolve(true);
+    }
+    if (enabled && readerActivationFailed) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+      const startedAt = performance.now();
+      const checkState = () => {
+        if (isReaderLayoutStateApplied(enabled)) {
+          resolve(true);
+          return;
+        }
+        if (enabled && readerActivationFailed) {
+          resolve(false);
+          return;
+        }
+        if (performance.now() - startedAt >= LAYOUT_STATE_SETTLE_TIMEOUT_MS) {
+          resolve(false);
+          return;
+        }
+        window.setTimeout(checkState, 40);
+      };
+
+      window.setTimeout(checkState, 0);
+    });
+  }
+
+  async function applyReaderEnabledState(nextEnabled, previousEnabled, shouldSettle = true) {
+    if (nextEnabled && shouldSettle) {
+      readerWarmStartRouteKey = getReaderRouteKey();
+    }
+    settings.readerEnabled = nextEnabled;
+    saveSettings();
+
+    try {
+      refreshPage(true);
+      if (!shouldSettle || await waitForReaderLayoutState(nextEnabled)) {
+        return true;
+      }
+    } catch {
+    }
+
+    settings.readerEnabled = previousEnabled;
+    saveSettings();
+    try {
+      refreshPage(true);
+      await waitForReaderLayoutState(previousEnabled);
+    } catch {
+      updatePageClasses();
+    }
+    return false;
+  }
+
+  function runLayoutParticleTransition(applyLayout) {
+    return new Promise((resolve) => {
+      const tryApplyLayout = async () => {
+        try {
+          return await applyLayout() !== false;
+        } catch {
+          return false;
+        }
+      };
+      const canvasState = createLayoutTransitionCanvas();
+      if (!canvasState) {
+        void tryApplyLayout().then(resolve);
+        return;
+      }
+
+      const root = document.documentElement;
+      const particles = createLayoutTransitionParticles(getLayoutTransitionBounds());
+      const outgoingDuration = LAYOUT_TRANSITION_DURATION_MS * LAYOUT_TRANSITION_SWITCH_PROGRESS;
+      const incomingDuration = LAYOUT_TRANSITION_DURATION_MS - outgoingDuration;
+      const outgoingStartedAt = performance.now();
+      let layoutSwitchStarted = false;
+      let layoutSwitchSettled = false;
+      let layoutSwitchSucceeded = false;
+      let layoutSwitchStartedAt = 0;
+      let incomingStartedAt = 0;
+
+      root.classList.add("weibo-grid-reader-layout-transitioning", "weibo-grid-reader-layout-transition-out");
+
+      const finish = (succeeded) => {
+        root.classList.remove(
+          "weibo-grid-reader-layout-transitioning",
+          "weibo-grid-reader-layout-transition-out",
+          "weibo-grid-reader-layout-transition-in"
+        );
+        canvasState.canvas.remove();
+        resolve(succeeded);
+      };
+
+      const settleLayoutSwitch = async () => {
+        layoutSwitchSucceeded = await tryApplyLayout();
+        layoutSwitchSettled = true;
+      };
+
+      const drawFrame = (timestamp) => {
+        canvasState.context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        if (!layoutSwitchStarted) {
+          const outgoingProgress = Math.min(1, (timestamp - outgoingStartedAt) / outgoingDuration);
+          for (const particle of particles) {
+            drawLayoutTransitionParticle(canvasState.context, particle, outgoingProgress, false);
+          }
+
+          if (outgoingProgress < 1) {
+            window.requestAnimationFrame(drawFrame);
+            return;
+          }
+
+          layoutSwitchStarted = true;
+          layoutSwitchStartedAt = timestamp;
+          void settleLayoutSwitch();
+          window.requestAnimationFrame(drawFrame);
+          return;
+        }
+
+        if (!layoutSwitchSettled) {
+          const waitingPulse = 0.72 + Math.sin((timestamp - layoutSwitchStartedAt) / 180) * 0.04;
+          for (const particle of particles) {
+            drawLayoutTransitionParticle(canvasState.context, particle, waitingPulse, false);
+          }
+          window.requestAnimationFrame(drawFrame);
+          return;
+        }
+
+        if (!incomingStartedAt) {
+          incomingStartedAt = timestamp;
+          root.classList.remove("weibo-grid-reader-layout-transition-out");
+          root.classList.add("weibo-grid-reader-layout-transition-in");
+        }
+
+        const incomingProgress = Math.min(1, (timestamp - incomingStartedAt) / incomingDuration);
+        for (const particle of particles) {
+          drawLayoutTransitionParticle(canvasState.context, particle, incomingProgress, true);
+        }
+
+        if (incomingProgress < 1) {
+          window.requestAnimationFrame(drawFrame);
+          return;
+        }
+        finish(layoutSwitchSucceeded);
+      };
+
+      window.requestAnimationFrame(drawFrame);
+    });
+  }
+
+  async function setReaderEnabledWithTransition(nextEnabled, readerToggle) {
+    if (layoutTransitionInProgress || nextEnabled === settings.readerEnabled) {
+      readerToggle.checked = settings.readerEnabled;
+      return;
+    }
+
+    const previousEnabled = settings.readerEnabled;
+    const applyLayout = () => applyReaderEnabledState(nextEnabled, previousEnabled, isFeedRoute());
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    layoutTransitionInProgress = true;
+    readerToggle.disabled = true;
+    const root = getExtensionRoot();
+    root?.classList.add("weibo-grid-reader--transitioning");
+    currentPageLayout?.setAttribute("aria-busy", "true");
+    setDrawerOpen(false);
+
+    try {
+      if (reduceMotion || !isFeedRoute()) {
+        await applyLayout();
+      } else {
+        await runLayoutParticleTransition(applyLayout);
+      }
+    } finally {
+      layoutTransitionInProgress = false;
+      root?.classList.remove("weibo-grid-reader--transitioning");
+      currentPageLayout?.removeAttribute("aria-busy");
+      updateControlState();
+    }
+  }
+
   function setDrawerOpen(nextDrawerOpen) {
     drawerOpen = nextDrawerOpen;
     updatePageClasses();
@@ -4349,10 +4666,7 @@
     });
 
     root.querySelector("[data-reader-toggle]")?.addEventListener("change", (event) => {
-      settings.readerEnabled = event.currentTarget.checked;
-      setDrawerOpen(false);
-      saveSettings();
-      refreshPage();
+      void setReaderEnabledWithTransition(event.currentTarget.checked, event.currentTarget);
     });
 
     root.querySelector("[data-density-slider]")?.addEventListener("input", (event) => {

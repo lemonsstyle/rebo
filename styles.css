@@ -14,6 +14,20 @@
   display: none !important;
 }
 
+#weibo-grid-reader-layout-transition {
+  height: 100vh;
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  width: 100vw;
+  z-index: 2147482999;
+}
+
+#weibo-grid-reader-root.weibo-grid-reader--transitioning .weibo-grid-reader__drawer,
+#weibo-grid-reader-root.weibo-grid-reader--transitioning .weibo-grid-reader__button {
+  transition-duration: 320ms;
+}
+
 .weibo-grid-reader__button {
   align-items: center;
   background: #ff8200;
@@ -319,8 +333,66 @@ html.weibo-grid-reader-active .weibo-grid-reader-navigation-panel {
   z-index: 2;
 }
 
+html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-composer-panel,
+html.weibo-grid-reader-layout-transitioning .wbpro-side {
+  transform-origin: 68% 48%;
+  will-change: filter, opacity, transform;
+}
+
+html.weibo-grid-reader-layout-transition-out .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transition-out .weibo-grid-reader-composer-panel,
+html.weibo-grid-reader-layout-transition-out .wbpro-side {
+  animation: weibo-grid-reader-layout-dissolve 400ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+html.weibo-grid-reader-layout-transition-in .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transition-in .weibo-grid-reader-composer-panel,
+html.weibo-grid-reader-layout-transition-in .wbpro-side {
+  animation: weibo-grid-reader-layout-reassemble 460ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes weibo-grid-reader-layout-dissolve {
+  from {
+    filter: blur(0) saturate(1);
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    filter: blur(1.6px) saturate(.82);
+    opacity: .1;
+    transform: translate3d(4px, -1px, 0) scale(.998);
+  }
+}
+
+@keyframes weibo-grid-reader-layout-reassemble {
+  from {
+    filter: blur(1.5px) saturate(.86);
+    opacity: .08;
+    transform: translate3d(-4px, 1px, 0) scale(1.002);
+  }
+
+  to {
+    filter: blur(0) saturate(1);
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 .vue-recycle-scroller.weibo-grid-reader-source-hidden {
   display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-feed-shell,
+  html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-composer-panel,
+  html.weibo-grid-reader-layout-transitioning .wbpro-side {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 html.weibo-grid-reader-active .weibo-grid-reader-utility-hidden,
