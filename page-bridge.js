@@ -8,6 +8,7 @@
   const officialTimelineByGroup = new Map();
   const observedTimelineEndpointByRoute = new Map();
   const observedTimelineEndpointByGroup = new Map();
+  let latestObservedOfficialTimeline = null;
   let readerTimelineRequestDepth = 0;
 
   function respond(requestId, bridgeSessionId, payload) {
@@ -186,7 +187,7 @@
 
     const groupId = getTimelineGroupId(endpoint);
     const routeGroupId = getFeedGroupId(routeKey);
-    if (!routeGroupId || !groupId || routeGroupId === groupId) {
+    if (!groupId || (routeGroupId && routeGroupId === groupId)) {
       observedTimelineEndpointByRoute.set(resolvedRouteKey, endpoint.href);
     }
     if (groupId) {
@@ -221,7 +222,14 @@
     const groupId = getTimelineGroupId(endpoint);
     const routeGroupId = getFeedGroupId(routeKey);
     const receivedAt = Date.now();
-    if (!routeGroupId || !groupId || routeGroupId === groupId) {
+    latestObservedOfficialTimeline = {
+      payload,
+      receivedAt,
+      endpointHref: endpoint.href,
+      groupId,
+      routeKey: resolvedRouteKey
+    };
+    if (!groupId || (routeGroupId && routeGroupId === groupId)) {
       officialTimelineByRoute.set(resolvedRouteKey, {
         payload,
         receivedAt
@@ -295,7 +303,10 @@
     const requestedGroupId = String(query?.list_id || query?.fid || query?.group_id || query?.gid || "");
     const groupedEndpoint = observedTimelineEndpointByGroup.get(requestedGroupId);
     if (groupedEndpoint) {
-      return new URL(groupedEndpoint, window.location.href);
+      const endpoint = new URL(groupedEndpoint, window.location.href);
+      if (isTimelineEndpointTemplateForGroup(endpoint, requestedGroupId)) {
+        return endpoint;
+      }
     }
     const entries = performance.getEntriesByType("resource").slice().reverse();
 
@@ -314,13 +325,26 @@
     return null;
   }
 
+  function isTimelineEndpointTemplateForGroup(endpoint, requestedGroupId) {
+    if (!requestedGroupId) {
+      return true;
+    }
+
+    const observedGroupId = getTimelineGroupId(endpoint);
+    return observedGroupId === requestedGroupId
+      || (!observedGroupId && endpoint.pathname === "/ajax/feed/groupstimeline");
+  }
+
   async function getTimelineEndpoint(query, routeKey) {
     const resolvedRouteKey = resolveFeedRouteKey(routeKey);
     const requestedGroupId = String(query?.list_id || query?.fid || query?.group_id || query?.gid || "");
     const rememberedEndpoint = observedTimelineEndpointByGroup.get(requestedGroupId)
       || observedTimelineEndpointByRoute.get(resolvedRouteKey);
     if (rememberedEndpoint) {
-      return new URL(rememberedEndpoint, window.location.href);
+      const endpoint = new URL(rememberedEndpoint, window.location.href);
+      if (isTimelineEndpointTemplateForGroup(endpoint, requestedGroupId)) {
+        return endpoint;
+      }
     }
 
     const initialEndpoint = findObservedTimelineEndpoint(query);
@@ -357,16 +381,26 @@
     return timeline && timeline.receivedAt >= requestedAt ? timeline.payload : null;
   }
 
+  function getFreshLatestObservedOfficialTimeline(requestedAt) {
+    if (!requestedAt || !latestObservedOfficialTimeline || latestObservedOfficialTimeline.receivedAt < requestedAt) {
+      return null;
+    }
+    return latestObservedOfficialTimeline.payload;
+  }
+
   function getFreshOfficialTimelineForRequest(routeKey, groupId, requestedAt) {
     const normalizedGroupId = String(groupId || "");
     const groupedPayload = getFreshOfficialTimelineForGroup(normalizedGroupId, requestedAt);
     if (groupedPayload) {
       return groupedPayload;
     }
-    if (normalizedGroupId && getFeedGroupId(routeKey) !== normalizedGroupId) {
-      return null;
+    if (!normalizedGroupId || getFeedGroupId(routeKey) === normalizedGroupId) {
+      const routePayload = getFreshOfficialTimeline(routeKey, requestedAt);
+      if (routePayload) {
+        return routePayload;
+      }
     }
-    return getFreshOfficialTimeline(routeKey, requestedAt);
+    return getFreshLatestObservedOfficialTimeline(requestedAt);
   }
 
   async function waitForOfficialTimeline(routeKey, requestedAt, groupId = "") {

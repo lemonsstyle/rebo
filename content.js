@@ -738,6 +738,7 @@
   function scheduleRouteSync(targetRouteKey) {
     cancelRouteSync();
     const deadline = Date.now() + 1200;
+    const selectionStartedAt = readerSelectionStartedAt;
 
     const synchronizeWhenReady = () => {
       routeSyncTimer = 0;
@@ -752,7 +753,18 @@
 
       if (Date.now() < deadline) {
         routeSyncTimer = window.setTimeout(synchronizeWhenReady, 40);
+        return;
       }
+
+      const currentRouteKey = getReaderRouteKey();
+      if (!currentRouteKey || !isFeedRoute()) {
+        return;
+      }
+
+      readerSelectionRouteKey = currentRouteKey;
+      readerSelectionStartedAt = selectionStartedAt || Date.now();
+      readerRouteKey = currentRouteKey;
+      resetReader();
     };
 
     routeSyncTimer = window.setTimeout(synchronizeWhenReady, 0);
@@ -4151,13 +4163,18 @@
     if (!preserveRetryState) {
       cancelReaderRetry();
     }
-    deactivateReaderSurface();
+    const wasReaderActive = readerActive;
+    if (!wasReaderActive || !mountReaderSurface()) {
+      deactivateReaderSurface();
+    } else {
+      activateReaderSurface();
+    }
     readerLoading = false;
     readerExhausted = false;
     readerMaxId = "";
     readerDuplicatePageCount = 0;
     cancelLoadMoreRetry();
-    setReaderLoadStatus();
+    setReaderLoadStatus(wasReaderActive ? "正在加载当前分组微博…" : "", wasReaderActive ? "loading" : "");
     readerFailedRouteKey = "";
     readerSeenIds.clear();
     getReaderGrid()?.replaceChildren();
@@ -4469,6 +4486,13 @@
 
   function observePage() {
     const observer = new MutationObserver((mutations) => {
+      const readerScrollerAdded = mutations.some((mutation) => [...mutation.addedNodes].some((node) => {
+        return node instanceof Element
+          && (node.matches(".vue-recycle-scroller") || node.querySelector(".vue-recycle-scroller"));
+      }));
+      if (readerActive && readerScrollerAdded) {
+        mountReaderSurface();
+      }
       if (mutationNeedsRefresh(mutations)) {
         refreshPage();
       }
@@ -4510,7 +4534,8 @@
     }, { capture: true });
     document.addEventListener("click", (event) => {
       const origin = event.target instanceof Element ? event.target : null;
-      const targetRouteKey = getReaderRouteKeyFromElement(origin);
+      const targetRouteKey = getReaderRouteKeyFromElement(origin)
+        || (origin && currentNavigationPanel?.contains(origin) ? getReaderRouteKey() : "");
       if (!targetRouteKey) {
         return;
       }
