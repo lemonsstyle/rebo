@@ -1933,6 +1933,15 @@
       || `https://weibo.com/n/${encodeURIComponent(normalizedName)}`;
   }
 
+  function getTopicHref(topic) {
+    const normalizedTopic = String(topic || "").trim();
+    if (!/^#[^#\r\n]+#$/.test(normalizedTopic)) {
+      return "";
+    }
+
+    return `https://s.weibo.com/weibo?q=${encodeURIComponent(normalizedTopic)}`;
+  }
+
   function appendPlainTextWithLinks(
     container,
     value,
@@ -1942,7 +1951,7 @@
   ) {
     const source = String(value || "");
     const mentionProfiles = getMentionProfiles(mentionSource);
-    const tokenPattern = /https?:\/\/[^\s<]+|@[^\s@：:，,。.!！？!?、；;（）()[\]{}"'<>]+/g;
+    const tokenPattern = /https?:\/\/[^\s<]+|#[^#\r\n]+?#|@[^\s@：:，,。.!！？!?、；;（）()[\]{}"'<>]+/g;
     let previousEnd = 0;
 
     for (const match of source.matchAll(tokenPattern)) {
@@ -1950,10 +1959,13 @@
       container.append(source.slice(previousEnd, matchIndex));
       const token = match[0];
       const url = token.startsWith("http") ? getSafeLinkHref(token) : "";
+      const topicHref = token.startsWith("#") ? getTopicHref(token) : "";
       if (url && renderCommentImages && isWeiboImageLink(url)) {
         container.append(createCommentImagePreview(url, comment));
       } else if (url) {
         container.append(createRichLink(url, token));
+      } else if (topicHref) {
+        container.append(createRichLink(topicHref, token));
       } else if (token.startsWith("@")) {
         const mentionName = token.slice(1);
         container.append(createRichLink(getMentionHref(mentionName, mentionProfiles), token));
@@ -4534,8 +4546,11 @@
     }, { capture: true });
     document.addEventListener("click", (event) => {
       const origin = event.target instanceof Element ? event.target : null;
-      const targetRouteKey = getReaderRouteKeyFromElement(origin)
-        || (origin && currentNavigationPanel?.contains(origin) ? getReaderRouteKey() : "");
+      if (!origin || !currentNavigationPanel?.contains(origin)) {
+        return;
+      }
+
+      const targetRouteKey = getReaderRouteKeyFromElement(origin);
       if (!targetRouteKey) {
         return;
       }
