@@ -4322,28 +4322,30 @@
 
   function createLayoutTransitionParticles(bounds) {
     const area = bounds.width * bounds.height;
-    const particleCount = Math.min(92, Math.max(42, Math.round(area / 12500)));
-    const aspectRatio = bounds.width / Math.max(1, bounds.height);
-    const columnCount = Math.max(1, Math.ceil(Math.sqrt(particleCount * aspectRatio)));
-    const rowCount = Math.ceil(particleCount / columnCount);
-    const cellWidth = bounds.width / columnCount;
-    const cellHeight = bounds.height / rowCount;
-    const palette = ["#50565b", "#767d82", "#aab0b4", "#d8dcdf", "#f4f5f6", "#ff8200"];
+    const particleCount = Math.min(260, Math.max(150, Math.round(area / 5200)));
+    const palette = ["#657074", "#899295", "#adb5b6", "#cbd1d0", "#e6e9e6", "#d89154"];
     const particles = [];
 
     for (let index = 0; index < particleCount; index += 1) {
-      const column = index % columnCount;
-      const row = Math.floor(index / columnCount);
-      const orangeAccent = Math.random() > 0.9;
+      const x = bounds.left + Math.random() * bounds.width;
+      const y = bounds.top + Math.random() * bounds.height;
+      const travelOrder = ((x - bounds.left) / bounds.width) * 0.74
+        + ((bounds.top + bounds.height - y) / bounds.height) * 0.26;
+      const isFlake = Math.random() > 0.88;
+      const orangeAccent = Math.random() > 0.965;
       particles.push({
-        x: bounds.left + (column + 0.18 + Math.random() * 0.64) * cellWidth,
-        y: bounds.top + (row + 0.18 + Math.random() * 0.64) * cellHeight,
-        driftX: 34 + Math.random() * 78,
-        driftY: -42 + Math.random() * 68,
-        delay: Math.random() * 0.18,
-        opacity: 0.28 + Math.random() * 0.48,
-        rotation: -0.45 + Math.random() * 0.9,
-        size: 1.2 + Math.random() * 2.8,
+        x,
+        y,
+        driftX: 68 + Math.random() * 104,
+        driftY: -24 - Math.random() * 62,
+        delay: Math.min(0.62, 0.02 + travelOrder * 0.42 + Math.random() * 0.1),
+        opacity: 0.16 + Math.random() * 0.32,
+        rotation: -0.7 + Math.random() * 1.4,
+        size: 0.42 + Math.random() * (isFlake ? 1.36 : 0.82),
+        length: isFlake ? 1.8 + Math.random() * 1.8 : 1,
+        isFlake,
+        turbulence: -5 + Math.random() * 10,
+        seed: Math.random() * Math.PI * 2,
         color: orangeAccent ? palette[palette.length - 1] : palette[Math.floor(Math.random() * (palette.length - 1))]
       });
     }
@@ -4377,19 +4379,27 @@
 
     const easedProgress = reassembling
       ? 1 - ((1 - localProgress) ** 3)
-      : localProgress ** 2;
+      : 1 - ((1 - localProgress) ** 2.4);
     const remainingDistance = reassembling ? 1 - easedProgress : easedProgress;
-    const x = particle.x + particle.driftX * remainingDistance;
-    const y = particle.y + particle.driftY * remainingDistance;
+    const driftCurve = remainingDistance ** 1.15;
+    const flutter = Math.sin(localProgress * Math.PI * 2 + particle.seed) * particle.turbulence * localProgress;
+    const x = particle.x + particle.driftX * driftCurve + flutter;
+    const y = particle.y + particle.driftY * driftCurve + flutter * 0.34;
     const opacity = Math.sin(localProgress * Math.PI) * particle.opacity;
-    const size = particle.size * (reassembling ? 0.75 + easedProgress * 0.25 : 1 + easedProgress * 0.35);
+    const size = particle.size * (reassembling ? 0.68 + easedProgress * 0.32 : 0.82 + easedProgress * 0.28);
 
     context.save();
     context.globalAlpha = opacity;
     context.fillStyle = particle.color;
     context.translate(x, y);
-    context.rotate(particle.rotation * remainingDistance);
-    context.fillRect(-size / 2, -size / 2, size * 1.45, size);
+    context.rotate(particle.rotation + remainingDistance * 0.48);
+    if (particle.isFlake) {
+      context.fillRect(-size * particle.length / 2, -size / 2, size * particle.length, size);
+    } else {
+      context.beginPath();
+      context.arc(0, 0, size / 2, 0, Math.PI * 2);
+      context.fill();
+    }
     context.restore();
   }
 

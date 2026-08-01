@@ -336,14 +336,14 @@ html.weibo-grid-reader-active .weibo-grid-reader-navigation-panel {
 html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-feed-shell,
 html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-composer-panel,
 html.weibo-grid-reader-layout-transitioning .wbpro-side {
-  transform-origin: 68% 48%;
+  transform-origin: 18% 78%;
   will-change: filter, opacity, transform;
 }
 
 html.weibo-grid-reader-layout-transition-out .weibo-grid-reader-feed-shell,
 html.weibo-grid-reader-layout-transition-out .weibo-grid-reader-composer-panel,
 html.weibo-grid-reader-layout-transition-out .wbpro-side {
-  animation: weibo-grid-reader-layout-dissolve 400ms cubic-bezier(.22, .61, .36, 1) both;
+  animation: weibo-grid-reader-layout-dissolve 400ms cubic-bezier(.2, .72, .32, 1) both;
 }
 
 html.weibo-grid-reader-layout-transition-in .weibo-grid-reader-feed-shell,
@@ -360,17 +360,17 @@ html.weibo-grid-reader-layout-transition-in .wbpro-side {
   }
 
   to {
-    filter: blur(1.6px) saturate(.82);
-    opacity: .1;
-    transform: translate3d(4px, -1px, 0) scale(.998);
+    filter: blur(1.15px) saturate(.88);
+    opacity: .06;
+    transform: translate3d(7px, -3px, 0) scale(.999);
   }
 }
 
 @keyframes weibo-grid-reader-layout-reassemble {
   from {
-    filter: blur(1.5px) saturate(.86);
-    opacity: .08;
-    transform: translate3d(-4px, 1px, 0) scale(1.002);
+    filter: blur(1.1px) saturate(.9);
+    opacity: .06;
+    transform: translate3d(-7px, 3px, 0) scale(1.001);
   }
 
   to {
