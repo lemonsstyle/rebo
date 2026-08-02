@@ -6,6 +6,7 @@
   const ROOT_ID = "weibo-grid-reader-root";
   const SURFACE_ID = "weibo-grid-reader-surface";
   const DETAIL_ID = "weibo-grid-reader-detail";
+  const DARK_THEME_CLASS = "weibo-grid-reader-theme-dark";
   const SETTINGS_KEY = "weiboGridReaderSettings";
   const BUTTON_ICON_PATH = "icon/32.png";
   const DEFAULT_SETTINGS = Object.freeze({
@@ -151,6 +152,8 @@
   let loadMoreFrame = 0;
   let loadMoreRetryTimer = 0;
   let loadMoreRetryAttempt = 0;
+  let themeObserver = null;
+  let themeUpdateFrame = 0;
   let readerDuplicatePageCount = 0;
   let readerResizeObserver = null;
   let readerCardResizeObserver = null;
@@ -257,6 +260,99 @@
 
   function getDetailOverlay() {
     return document.getElementById(DETAIL_ID);
+  }
+
+  function getThemeMarker(element) {
+    if (!element) {
+      return "";
+    }
+
+    const classValue = typeof element.className === "string"
+      ? element.className
+      : element.getAttribute("class") || "";
+    return [
+      classValue.split(/\s+/).filter((className) => className !== DARK_THEME_CLASS).join(" "),
+      element.getAttribute("data-theme") || "",
+      element.getAttribute("data-color-mode") || "",
+      element.getAttribute("data-skin") || "",
+      element.getAttribute("data-appearance") || ""
+    ].join(" ").toLowerCase();
+  }
+
+  function getBackgroundLuminance(element) {
+    let current = element;
+    while (current) {
+      const background = window.getComputedStyle(current).backgroundColor;
+      const match = background.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+      const alpha = match ? Number(match[4] ?? 1) : 0;
+      if (match && alpha > 0.05) {
+        const [red, green, blue] = match.slice(1, 4).map(Number);
+        return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function isPageDarkTheme() {
+    const rootMarker = getThemeMarker(document.documentElement);
+    const bodyMarker = getThemeMarker(document.body);
+    const markers = `${rootMarker} ${bodyMarker}`;
+    if (/(^|[\s_-])(dark|night|black)(?=$|[\s_-])/.test(markers)) {
+      return true;
+    }
+    if (/(^|[\s_-])(light|day|white)(?=$|[\s_-])/.test(markers)) {
+      return false;
+    }
+
+    const colorScheme = [document.documentElement, document.body]
+      .filter(Boolean)
+      .map((element) => window.getComputedStyle(element).colorScheme || "")
+      .join(" ")
+      .toLowerCase();
+    if (/\bdark\b/.test(colorScheme) && !/\blight\b/.test(colorScheme)) {
+      return true;
+    }
+
+    const luminances = [
+      getBackgroundLuminance(findNavigationPanel()),
+      getBackgroundLuminance(findFeedShell()),
+      getBackgroundLuminance(document.body),
+      getBackgroundLuminance(document.documentElement)
+    ].filter((value) => value !== null);
+    return luminances.length > 0 && luminances[0] < 0.42;
+  }
+
+  function updateThemeState() {
+    const dark = isPageDarkTheme();
+    document.documentElement.classList.toggle(DARK_THEME_CLASS, dark);
+    getExtensionRoot()?.classList.toggle(DARK_THEME_CLASS, dark);
+    getReaderSurface()?.classList.toggle(DARK_THEME_CLASS, dark);
+  }
+
+  function scheduleThemeStateUpdate() {
+    if (themeUpdateFrame) {
+      return;
+    }
+
+    themeUpdateFrame = window.requestAnimationFrame(() => {
+      themeUpdateFrame = 0;
+      updateThemeState();
+    });
+  }
+
+  function observeTheme() {
+    updateThemeState();
+    themeObserver?.disconnect();
+    themeObserver = new MutationObserver(scheduleThemeStateUpdate);
+    const options = {
+      attributes: true,
+      attributeFilter: ["class", "data-theme", "data-color-mode", "data-skin", "data-appearance", "style"]
+    };
+    themeObserver.observe(document.documentElement, options);
+    if (document.body) {
+      themeObserver.observe(document.body, options);
+    }
   }
 
   function getControls() {
@@ -4663,6 +4759,7 @@
       }
 
       updatePageAnchors();
+      scheduleThemeStateUpdate();
       hideUtilityFooter();
       updateControlState();
       synchronizeReader();
@@ -4769,6 +4866,7 @@
       }, 180);
     });
     window.setInterval(() => {
+      scheduleThemeStateUpdate();
       if (window.location.href !== lastUrl) {
         refreshPage();
       }
@@ -4782,6 +4880,7 @@
 
     listenForBridgeResponses();
     createControls();
+    observeTheme();
     observePage();
     await loadSettings();
     await injectBridge();

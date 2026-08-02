@@ -1981,6 +1981,241 @@ html.weibo-grid-reader-detail-open {
   color: #b45100;
 }
 
+html.weibo-grid-reader-theme-dark #weibo-grid-reader-root {
+  color: #e8e9eb;
+  color-scheme: dark;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__drawer {
+  background: #242529;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 38%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__close {
+  background: #34363b;
+  color: #d7d9dd;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__settings {
+  background: #2d2925;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__setting {
+  border-bottom-color: rgb(255 145 56 / 18%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__setting small,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-labels {
+  color: #a5a8ad;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__switch-track {
+  background: #55585e;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-slider {
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--weibo-grid-reader-density-progress, 0%),
+    #655345 var(--weibo-grid-reader-density-progress, 0%) 100%
+  );
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-slider::-moz-range-track {
+  background: #655345;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__grid {
+  background: #18191c;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card {
+  background: #242529;
+  border-color: #303238;
+  box-shadow: 0 0 0 5px #1b1c1f, 0 2px 12px rgb(0 0 0 / 24%);
+  color: #e8e9eb;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card:hover {
+  box-shadow: 0 0 0 5px #303238, 0 12px 30px rgb(0 0 0 / 38%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-overlay {
+  background: rgb(0 0 0 / 48%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog {
+  background: #242529;
+  border-color: #383a40;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 48%);
+  color: #e8e9eb;
+  color-scheme: dark;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side {
+  border-color: #3a342f;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-media {
+  background: #303136;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-media {
+  border-color: #41434a;
+  color: #e1e3e6;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comments h2,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment p,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input {
+  color: #e1e3e6;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-text {
+  color: #c8cbd0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__identity span,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__metrics,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-content p,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment span,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-empty,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-preview--failed {
+  color: #9da1a8;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-image-viewer,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__image-wrap,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-thumbnail,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-cover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__avatar,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-avatar,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-source-avatar {
+  background: #35373d;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image {
+  background: #303238;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail-rail {
+  background: #202125;
+  border-color: #383a40;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button {
+  background: #2b2c31;
+  border-color: #76543a;
+  color: #ffad65;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-load-more:hover {
+  background: #493426;
+  border-color: #b4692d;
+  color: #ffc18b;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit:disabled,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:disabled {
+  background: #62574f;
+  border-color: #62574f;
+  color: #d2ccc7;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-form {
+  background: #292a2f;
+  border-color: #504238;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 32%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form-count,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-count,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-status,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action-feedback,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-feedback {
+  color: #9f9a96;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-heading,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-source-name {
+  color: #b8aaa0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-load-more {
+  border-color: #604a3a;
+  color: #f0a469;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-source-actions {
+  border-color: #403a35;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment .weibo-grid-reader__comment-header .weibo-grid-reader__comment-author-badge,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-source-actions {
+  background: #3b3028;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side-content {
+  background: #211f1e;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-original {
+  background: #282522;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__load-status {
+  color: #aaa4a0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__load-status[data-state="error"] {
+  color: #ffad65;
+}
+
 @keyframes weibo-grid-reader-loading-spin {
   to {
     transform: rotate(360deg);

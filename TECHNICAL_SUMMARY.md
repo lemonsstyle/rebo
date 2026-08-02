@@ -240,6 +240,7 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 - 卡片高度由 `readerCardResizeObserver`（`ResizeObserver`）缓存，使用 `borderBoxSize[0].blockSize` 获取边框盒高度（回退到 `contentRect.height`），变化阈值为 0.5px；常规媒体加载不再对所有卡片做强制高度读取；仅首次布局或列宽变化重新测量；
 - 卡片保持原列、使用 `translate3d` 定位，且移除了容器高度和位置动画，降低滚动中的重排与绘制压力；
+- 读取器会监听 `html/body` 的主题类名、`data-theme / data-color-mode / data-skin / data-appearance` 与内联样式变化，并以官方导航栏/信息流的实际背景亮度作为兜底；检测到深色模式后给根节点同步 `weibo-grid-reader-theme-dark`，由 `styles.css` 一次性切换卡片墙、详情、评论区和设置面板配色。750ms 页面状态检查也会顺带重新确认主题，从而覆盖微博仅更新 CSS 变量而不改 DOM 属性的情况；
 - 补页主要由位于墙底的 `IntersectionObserver` 触发，不再为每次页面滚动创建补页检测帧；
 - `MutationObserver`（挂在 `document.documentElement`，`childList: true, subtree: true`）只在新增节点本身或子树包含 `.vue-recycle-scroller`、`.woo-panel-left`、`.wbpro-side`、`div.scale` 时调用刷新（`mutationNeedsRefresh` 辅助函数）；
 - 左下角“使用新布局”开关采用克制的暗化缩放转场：右侧内容区先降低亮度并轻微缩小，读取器 surface 真正完成挂载或卸载后再柔和恢复；左侧关注分组栏不参与动画。开启时会优先复用当前分组已经被微博官方页面确认过的首屏数据，不再因点击时刻较新而错误丢弃这份可用数据；明确首屏失败会立即回滚，仍在请求中的情况才继续等待，避免出现“开关已开启但仍显示官方布局”的假切换。`prefers-reduced-motion: reduce` 下会直接完成同一套状态事务；
