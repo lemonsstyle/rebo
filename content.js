@@ -4117,6 +4117,9 @@
     const generation = readerGeneration;
     const routeKey = readerRouteKey;
     const canUseWarmStartTimeline = !readerMaxId && readerWarmStartRouteKey === routeKey;
+    if (canUseWarmStartTimeline) {
+      readerWarmStartRouteKey = "";
+    }
     const requestedAt = canUseWarmStartTimeline
       ? 0
       : readerSelectionRouteKey === routeKey
@@ -4447,6 +4450,12 @@
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
       return true;
     };
+
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduceMotion) {
+      await applyLayout();
+      return;
+    }
 
     layoutTransitionInProgress = true;
     densitySlider.disabled = true;
