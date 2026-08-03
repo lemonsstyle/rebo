@@ -62,7 +62,11 @@
     ["失望", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/3d/201810_shiwang_mobile.png"],
     ["悲伤", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/49/201810_beishang_mobile.png"],
     ["泪", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/87/201810_lei_mobile.png"],
-    ["允悲", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/65/201810_ybnew_mobile.png"],
+    [
+      "允悲",
+      "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/2c/moren_yunbei_org.png",
+      ["https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/65/201810_ybnew_mobile.png"]
+    ],
     ["苦涩", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/5f/2021_bitter_mobile.png"],
     ["害羞", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/c1/201810_haixiu_mobile.png"],
     ["爱你", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/db/201810_aini_mobile.png"],
@@ -121,7 +125,14 @@
     ["跪了", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/2f/201810_guile_mobile.png"],
     ["收到", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/19/2022_get_mobile.png"],
     ["你好", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/8e/2023_hello_mobile.png"]
-  ].map(([name, src]) => Object.freeze({ name, src })));
+  ].map(([name, src, fallbackSources = []]) => Object.freeze({
+    name,
+    src,
+    fallbackSources: Object.freeze(fallbackSources)
+  })));
+  const COMMENT_EMOJI_BY_TOKEN = new Map(
+    COMMENT_EMOJIS.map((emoji) => [`[${emoji.name}]`, emoji])
+  );
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -1383,15 +1394,193 @@
     }
   }
 
-  function getRichTextAnchorHref(anchor) {
+  function getFirstSafeLinkHref(values) {
+    for (const value of values) {
+      if (typeof value !== "string" || !value.trim()) {
+        continue;
+      }
+      const href = getSafeLinkHref(value);
+      if (href) {
+        return href;
+      }
+    }
+    return "";
+  }
+
+  function getStatusLinkMetadata(status) {
+    const entries = [];
+    const seen = new Set();
+    const sources = [
+      status?.url_struct,
+      status?.urlStruct,
+      status?.url_objects,
+      status?.urlObjects
+    ];
+
+    const addEntry = (value, propertyName = "") => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return;
+      }
+
+      const pageInfo = value.page_info || value.pageInfo || {};
+      const propertyHref = /^(?:https?:)?\/\//i.test(propertyName)
+        ? getSafeLinkHref(propertyName)
+        : "";
+      const shortHref = getFirstSafeLinkHref([
+        value.short_url,
+        value.shortUrl,
+        value.url_short,
+        value.urlShort,
+        propertyHref
+      ]);
+      const href = getFirstSafeLinkHref([
+        value.long_url,
+        value.longUrl,
+        value.ori_url,
+        value.oriUrl,
+        value.page_url,
+        value.pageUrl,
+        pageInfo.page_url,
+        pageInfo.pageUrl,
+        pageInfo.object_url,
+        pageInfo.objectUrl,
+        value.url,
+        shortHref
+      ]);
+      const label = String(
+        value.url_title
+        || value.urlTitle
+        || value.display_name
+        || value.displayName
+        || value.title
+        || ""
+      ).trim();
+      if (!href || (!shortHref && !label)) {
+        return;
+      }
+
+      const tokens = new Set([
+        value.short_url,
+        value.shortUrl,
+        value.url_short,
+        value.urlShort,
+        propertyHref,
+        shortHref,
+        href,
+        label
+      ].map((item) => String(item || "").trim()).filter(Boolean));
+      const key = `${href}\n${shortHref}\n${label}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      entries.push({ href, shortHref, label, tokens });
+    };
+
+    const visit = (value, depth = 0, propertyName = "") => {
+      if (!value || depth > 3) {
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((item) => visit(item, depth + 1));
+        return;
+      }
+      if (typeof value !== "object") {
+        return;
+      }
+
+      addEntry(value, propertyName);
+      Object.entries(value).forEach(([key, item]) => {
+        if (item && typeof item === "object") {
+          visit(item, depth + 1, key);
+        }
+      });
+    };
+
+    sources.forEach((source) => visit(source));
+    return entries;
+  }
+
+  function createStatusLinkContext(status) {
+    return {
+      entries: getStatusLinkMetadata(status),
+      rendered: new Set()
+    };
+  }
+
+  function findStatusLinkMetadata(context, { href = "", label = "", tokens = [] } = {}) {
+    if (!context?.entries?.length) {
+      return null;
+    }
+
+    const normalizedHref = getSafeLinkHref(href);
+    const normalizedLabel = String(label || "").trim();
+    const normalizedTokens = new Set(
+      tokens.map((token) => String(token || "").trim()).filter(Boolean)
+    );
+    if (href) {
+      normalizedTokens.add(String(href).trim());
+    }
+    if (normalizedHref) {
+      normalizedTokens.add(normalizedHref);
+    }
+    if (normalizedLabel) {
+      normalizedTokens.add(normalizedLabel);
+    }
+
+    return context.entries.find((entry) => {
+      if (context.rendered.has(entry)) {
+        return false;
+      }
+      if (normalizedHref && (entry.href === normalizedHref || entry.shortHref === normalizedHref)) {
+        return true;
+      }
+      if (normalizedLabel && entry.label === normalizedLabel) {
+        return true;
+      }
+      return [...normalizedTokens].some((token) => entry.tokens.has(token));
+    }) || null;
+  }
+
+  function markStatusLinkMetadataRendered(context, metadata) {
+    if (context && metadata) {
+      context.rendered.add(metadata);
+    }
+  }
+
+  function isInlineWebLinkLabel(value) {
+    return /^(?:网页链接|網頁鏈接|网页連結|web\s*link)$/i.test(String(value || "").replace(/\s+/g, " ").trim());
+  }
+
+  function appendUnrenderedStatusLinks(container, context) {
+    if (!context?.entries?.length) {
+      return;
+    }
+
+    for (const metadata of context.entries) {
+      if (context.rendered.has(metadata) || !isInlineWebLinkLabel(metadata.label)) {
+        continue;
+      }
+      if (container.childNodes.length && !/\s$/.test(container.textContent || "")) {
+        container.append(" ");
+      }
+      container.append(createRichLink(metadata.href, metadata.label));
+      markStatusLinkMetadataRendered(context, metadata);
+    }
+  }
+
+  function getRichTextAnchorInfo(anchor, linkContext) {
+    const linkTokens = [];
+    let href = "";
     for (const attributeName of ["href", "data-url", "data-href"]) {
       const attributeValue = anchor.getAttribute(attributeName) || "";
       if (!attributeValue || attributeValue === "#") {
         continue;
       }
-      const href = getSafeLinkHref(attributeValue);
-      if (href) {
-        return href;
+      linkTokens.push(attributeValue);
+      const safeHref = getSafeLinkHref(attributeValue);
+      if (!href && safeHref) {
+        href = safeHref;
       }
     }
 
@@ -1403,24 +1592,36 @@
       || userCardParams.get("id")
       || userCardParams.get("uid")
       || "";
-    if (/^\d+$/.test(userId)) {
-      return getProfileUrl({ idstr: userId });
+    if (!href && /^\d+$/.test(userId)) {
+      href = getProfileUrl({ idstr: userId });
     }
 
     const userName = userCardParams.get("name") || "";
-    if (userName) {
-      return `https://weibo.com/n/${encodeURIComponent(userName)}`;
+    if (!href && userName) {
+      href = `https://weibo.com/n/${encodeURIComponent(userName)}`;
     }
 
     const anchorText = anchor.textContent?.trim() || "";
-    if (userCard && anchorText.startsWith("@")) {
+    if (!href && userCard && anchorText.startsWith("@")) {
       const mentionName = anchorText.slice(1).replace(/[：:]$/, "").trim();
       if (mentionName) {
-        return `https://weibo.com/n/${encodeURIComponent(mentionName)}`;
+        href = `https://weibo.com/n/${encodeURIComponent(mentionName)}`;
       }
     }
 
-    return "";
+    const metadata = findStatusLinkMetadata(linkContext, {
+      href,
+      label: anchorText,
+      tokens: linkTokens
+    });
+    return {
+      href: href || metadata?.href || "",
+      label: metadata?.label
+        || anchor.getAttribute("aria-label")
+        || anchor.getAttribute("title")
+        || "",
+      metadata
+    };
   }
 
   function createRichLink(href, textContent = "", preserveReferrer = false) {
@@ -1440,6 +1641,61 @@
       openNativeImageViewer(href);
     });
     return link;
+  }
+
+  function getCommentEmoji(value) {
+    const normalizedToken = String(value || "")
+      .replace(/[\u200b-\u200d\ufeff]/g, "")
+      .replace(/^［/, "[")
+      .replace(/］$/, "]")
+      .replace(/\s+/g, "")
+      .trim();
+    return COMMENT_EMOJI_BY_TOKEN.get(normalizedToken) || null;
+  }
+
+  function createRichEmoji(src, alt = "") {
+    const emoji = document.createElement("img");
+    emoji.className = "weibo-grid-reader__emoji";
+    emoji.alt = alt;
+    const fallbackEmoji = getCommentEmoji(alt);
+    const sources = [...new Set([
+      src,
+      fallbackEmoji?.src,
+      ...(fallbackEmoji?.fallbackSources || [])
+    ].map((value) => getSafeLinkHref(value)).filter(Boolean))];
+    let sourceIndex = 0;
+    const loadSource = () => {
+      emoji.src = sources[sourceIndex] || "";
+    };
+    emoji.addEventListener("error", () => {
+      sourceIndex += 1;
+      if (sourceIndex < sources.length) {
+        loadSource();
+        return;
+      }
+      emoji.replaceWith(document.createTextNode(emoji.alt));
+      scheduleMasonryLayout();
+    });
+    emoji.addEventListener("load", scheduleMasonryLayout, { once: true });
+    loadSource();
+    return emoji;
+  }
+
+  function getRichTextImageSource(image) {
+    return getFirstSafeLinkHref([
+      image.getAttribute("src"),
+      image.getAttribute("data-src"),
+      image.getAttribute("data-original"),
+      image.getAttribute("data-original-src"),
+      image.getAttribute("data-lazy-src")
+    ]);
+  }
+
+  function getRichTextImageAlt(image) {
+    return image.getAttribute("alt")
+      || image.getAttribute("title")
+      || image.getAttribute("data-alt")
+      || "";
   }
 
   function isWeiboImageLink(value) {
@@ -2055,11 +2311,25 @@
     value,
     renderCommentImages = false,
     comment = null,
-    mentionSource = null
+    mentionSource = null,
+    statusLinkContext = null
   ) {
     const source = String(value || "");
     const mentionProfiles = getMentionProfiles(mentionSource);
-    const tokenPattern = /https?:\/\/[^\s<]+|#[^#\r\n]+?#|@[^\s@：:，,。.!！？!?、；;（）()[\]{}"'<>]+/g;
+    const linkContext = statusLinkContext || createStatusLinkContext(mentionSource);
+    const inlineLinkLabels = [...new Set(
+      linkContext.entries
+        .map((entry) => entry.label)
+        .filter(isInlineWebLinkLabel)
+    )].sort((first, second) => second.length - first.length);
+    const escapedInlineLinkLabels = inlineLinkLabels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const tokenPattern = new RegExp([
+      "https?:\\/\\/[^\\s<]+",
+      "#[^#\\r\\n]+?#",
+      "@[^\\s@：:，,。.!！？!?、；;（）()[\\]{}\"'<>]+",
+      "[\\[［][^\\[\\]［］\\r\\n]{1,24}[\\]］]",
+      ...escapedInlineLinkLabels
+    ].join("|"), "g");
     let previousEnd = 0;
 
     for (const match of source.matchAll(tokenPattern)) {
@@ -2068,8 +2338,20 @@
       const token = match[0];
       const url = token.startsWith("http") ? getSafeLinkHref(token) : "";
       const topicHref = token.startsWith("#") ? getTopicHref(token) : "";
+      const linkMetadata = findStatusLinkMetadata(linkContext, {
+        href: url,
+        label: isInlineWebLinkLabel(token) ? token : "",
+        tokens: [token]
+      });
+      const emoji = getCommentEmoji(token);
       if (url && renderCommentImages && isWeiboImageLink(url)) {
         container.append(createCommentImagePreview(url, comment));
+      } else if (linkMetadata) {
+        container.append(createRichLink(
+          linkMetadata.href,
+          linkMetadata.label || token
+        ));
+        markStatusLinkMetadataRendered(linkContext, linkMetadata);
       } else if (url) {
         container.append(createRichLink(url, token));
       } else if (topicHref) {
@@ -2077,6 +2359,8 @@
       } else if (token.startsWith("@")) {
         const mentionName = token.slice(1);
         container.append(createRichLink(getMentionHref(mentionName, mentionProfiles), token));
+      } else if (emoji) {
+        container.append(createRichEmoji(emoji.src, token));
       } else {
         container.append(token);
       }
@@ -2097,6 +2381,7 @@
     const template = document.createElement("template");
     const source = status.text || status.text_raw || "";
     const hideVideoLink = Boolean(getVideoMedia(status));
+    const linkContext = createStatusLinkContext(status);
     template.innerHTML = source;
 
     const appendNodes = (nodes, target, shouldLinkify = linkifyText) => {
@@ -2104,7 +2389,14 @@
         if (node.nodeType === Node.TEXT_NODE) {
           const text = hideVideoLink ? node.textContent.replace(/https?:\/\/\S+/g, "") : node.textContent;
           if (shouldLinkify) {
-            appendPlainTextWithLinks(target, text, renderCommentImages, comment, mentionSource);
+            appendPlainTextWithLinks(
+              target,
+              text,
+              renderCommentImages,
+              comment,
+              mentionSource,
+              linkContext
+            );
           } else {
             target.append(text);
           }
@@ -2120,30 +2412,29 @@
           continue;
         }
 
-        if (node.tagName === "IMG" && node.getAttribute("src")) {
-          const emoji = document.createElement("img");
-          emoji.className = "weibo-grid-reader__emoji";
-          emoji.alt = node.getAttribute("alt") || "";
-          emoji.src = node.getAttribute("src");
-          emoji.addEventListener("error", () => {
-            emoji.replaceWith(document.createTextNode(emoji.alt));
-            scheduleMasonryLayout();
-          }, { once: true });
-          emoji.addEventListener("load", scheduleMasonryLayout, { once: true });
-          target.append(emoji);
+        if (node.tagName === "IMG") {
+          const emojiSource = getRichTextImageSource(node);
+          const emojiAlt = getRichTextImageAlt(node);
+          target.append(emojiSource ? createRichEmoji(emojiSource, emojiAlt) : emojiAlt);
           continue;
         }
 
         if (node.tagName === "A") {
-          const href = getRichTextAnchorHref(node);
+          const anchorInfo = getRichTextAnchorInfo(node, linkContext);
+          const href = anchorInfo.href;
           if (href) {
             if (renderCommentImages && isWeiboImageLink(href)) {
               target.append(createCommentImagePreview(href, comment));
+              markStatusLinkMetadataRendered(linkContext, anchorInfo.metadata);
               continue;
             }
             const link = createRichLink(href);
             target.append(link);
             appendNodes(node.childNodes, link, false);
+            if (!link.textContent?.trim() && anchorInfo.label) {
+              link.append(anchorInfo.label);
+            }
+            markStatusLinkMetadataRendered(linkContext, anchorInfo.metadata);
             continue;
           }
         }
@@ -2153,6 +2444,7 @@
     };
 
     appendNodes(template.content.childNodes, container);
+    appendUnrenderedStatusLinks(container, linkContext);
   }
 
   function appendRichCommentText(container, comment) {
@@ -2168,7 +2460,9 @@
     if ((preserveLayout && status.text) || hasRichStatusText(status)) {
       appendRichStatusText(container, status, true);
     } else {
-      appendPlainTextWithLinks(container, displayText || "转发微博", false, null, status);
+      const linkContext = createStatusLinkContext(status);
+      appendPlainTextWithLinks(container, displayText || "转发微博", false, null, status, linkContext);
+      appendUnrenderedStatusLinks(container, linkContext);
     }
   }
 
@@ -2741,15 +3035,15 @@
       }
 
       const rect = viewer.getBoundingClientRect();
-      if (!rect.height) {
+      if (!rect.width) {
         return "zoom";
       }
 
-      const relativeY = (event.clientY - rect.top) / rect.height;
-      if (relativeY <= 0.2 && navigation.canNavigate?.("previous") !== false) {
+      const relativeX = (event.clientX - rect.left) / rect.width;
+      if (relativeX <= 0.2 && navigation.canNavigate?.("previous") !== false) {
         return "previous";
       }
-      if (relativeY >= 0.8 && navigation.canNavigate?.("next") !== false) {
+      if (relativeX >= 0.8 && navigation.canNavigate?.("next") !== false) {
         return "next";
       }
       return "zoom";
@@ -2854,8 +3148,8 @@
       });
       if (rail.isConnected) {
         buttons[index]?.scrollIntoView({
-          block: "center",
-          inline: "nearest",
+          block: "nearest",
+          inline: "center",
           behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
         });
       }
@@ -4048,6 +4342,9 @@
       repostPost = createDetailPost(status.retweeted_status, true, detailMedia.media);
       main.append(repostPost);
     }
+    if (detailMedia.rail) {
+      (repostPost || primaryPost).append(detailMedia.rail);
+    }
 
     const commentsSection = document.createElement("section");
     commentsSection.className = "weibo-grid-reader__comments";
@@ -4116,12 +4413,7 @@
     sourceActions.append(sourceProfile, original, sourceName);
     side.append(sideContent, sourceActions);
 
-    if (detailMedia.rail) {
-      dialog.classList.add("weibo-grid-reader__detail-dialog--gallery");
-      dialog.append(main, detailMedia.rail, side);
-    } else {
-      dialog.append(main, side);
-    }
+    dialog.append(main, side);
     overlay.append(dialog);
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) {
