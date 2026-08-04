@@ -44,3 +44,9 @@ rebo 不保存 Cookie，也不会把个人信息上传到其他服务器，所�
 有问题可以提 issue，每月更新插件，保证舒适体验。
 
 实现细节、接口取舍和维护检查见 [TECHNICAL_SUMMARY.md](TECHNICAL_SUMMARY.md)。
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源。
+
+本项目与微博官方无隶属或合作关系；微博及相关名称、商标和内容归其权利人所有。
