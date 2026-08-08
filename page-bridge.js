@@ -1,6 +1,11 @@
 (() => {
   "use strict";
 
+  if (window.__weiboGridReaderBridgeInstalled) {
+    return;
+  }
+  window.__weiboGridReaderBridgeInstalled = true;
+
   const CHANNEL = "weibo-grid-reader-v4";
   const OBSERVED_TIMELINE_WAIT_MS = 320;
   const TIMELINE_ENDPOINT_WAIT_MS = 600;
