@@ -4648,8 +4648,14 @@
     original.href = getStatusUrl(status);
     original.textContent = "原文";
     const sourceProfileUrl = getProfileUrl(status.user);
-    const sourceProfile = document.createElement("span");
+    const sourceProfile = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
     sourceProfile.className = "weibo-grid-reader__detail-source-profile";
+    if (sourceProfileUrl) {
+      sourceProfile.href = sourceProfileUrl;
+      sourceProfile.target = "_blank";
+      sourceProfile.rel = "noopener noreferrer";
+      sourceProfile.setAttribute("aria-label", `打开 ${status.user?.screen_name || "微博用户"} 的主页`);
+    }
     const sourceAvatar = document.createElement("img");
     sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
     sourceAvatar.alt = "";
@@ -5000,6 +5006,11 @@
     }
     settings.readerEnabled = nextEnabled;
     saveSettings();
+
+    if (!nextEnabled) {
+      unmountReaderSurface();
+      return true;
+    }
 
     try {
       refreshPage(true);
