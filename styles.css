@@ -1949,6 +1949,171 @@ html.weibo-grid-reader-detail-open {
   margin-top: auto;
 }
 
+.weibo-grid-reader__card-actions {
+  gap: 4px;
+}
+
+.weibo-grid-reader__card-action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 0;
+  font: inherit;
+  gap: 5px;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 0;
+  padding: 4px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.weibo-grid-reader__card-action-icon {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.weibo-grid-reader__card-action-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__card-action:hover:not(:disabled),
+.weibo-grid-reader__card-action--active {
+  background: #fff1e2;
+  color: #b45100;
+}
+
+.weibo-grid-reader__card-action--liked {
+  color: #e56200;
+}
+
+.weibo-grid-reader__card-action--liked .weibo-grid-reader__card-action-icon--like path {
+  fill: currentColor;
+}
+
+.weibo-grid-reader__card-action--pending,
+.weibo-grid-reader__card-action:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__card-action:focus-visible,
+.weibo-grid-reader__card-composer-input:focus-visible,
+.weibo-grid-reader__card-composer-cancel:focus-visible,
+.weibo-grid-reader__card-composer-submit:focus-visible {
+  outline: 2px solid #ef851f;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__card-composer {
+  background: #fff8f1;
+  border: 1px solid #ead7c4;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+}
+
+.weibo-grid-reader__card-composer[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__card-composer-input {
+  background: transparent;
+  border: 0;
+  color: #333;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 42px;
+  outline: 0;
+  padding: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.weibo-grid-reader__card-composer-input::placeholder {
+  color: #a89b90;
+}
+
+.weibo-grid-reader__card-composer-input:disabled {
+  cursor: progress;
+}
+
+.weibo-grid-reader__card-composer-input:disabled + .weibo-grid-reader__comment-emoji-picker {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__card-composer-footer {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.weibo-grid-reader__card-composer-count {
+  color: #9a8a7c;
+  font-size: 11px;
+  margin-right: auto;
+}
+
+.weibo-grid-reader__card-composer-cancel,
+.weibo-grid-reader__card-composer-submit {
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 11px;
+}
+
+.weibo-grid-reader__card-composer-cancel {
+  background: #fff;
+  border: 1px solid #e6c5a4;
+  color: #b45100;
+}
+
+.weibo-grid-reader__card-composer-submit {
+  background: #f47a11;
+  border: 1px solid #f47a11;
+  color: #fff;
+}
+
+.weibo-grid-reader__card-composer-cancel:hover:not(:disabled) {
+  background: #fff1e2;
+}
+
+.weibo-grid-reader__card-composer-submit:hover:not(:disabled) {
+  background: #da6300;
+  border-color: #da6300;
+}
+
+.weibo-grid-reader__card-composer-cancel:disabled,
+.weibo-grid-reader__card-composer-submit:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__card-action-feedback {
+  color: #907a66;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: -4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__card-action-feedback:empty {
+  display: none;
+}
+
 .weibo-grid-reader__sentinel {
   height: 2px;
 }
@@ -2074,7 +2239,8 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__text,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comments h2,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment p,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input,
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input {
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-input {
   color: #e1e3e6;
 }
 
@@ -2085,6 +2251,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-text {
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__identity span,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__metrics,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-count,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-content p,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment span,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-empty,
@@ -2115,6 +2282,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail-rail {
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button {
   background: #2b2c31;
   border-color: #76543a;
@@ -2125,6 +2293,9 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action:hover:not(:d
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like:hover,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action--active,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel:hover:not(:disabled),
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button:hover:not(:disabled),
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger:hover,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
@@ -2138,6 +2309,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-load-more:hover {
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active:hover,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
   background: #f47a11;
   border-color: #f47a11;
@@ -2145,6 +2317,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-foote
 }
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit:disabled,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit:disabled,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:disabled {
   background: #62574f;
   border-color: #62574f;
@@ -2153,6 +2326,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-foote
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-form {
   background: #292a2f;
   border-color: #504238;
@@ -2164,10 +2338,12 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel {
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input::placeholder,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-input::placeholder,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form-count,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-count,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-status,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action-feedback,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action-feedback,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-feedback {
   color: #9f9a96;
 }
