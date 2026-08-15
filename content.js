@@ -174,6 +174,7 @@
   let masonryCardWidth = 0;
   let masonryEpoch = 0;
   let activeDetailStatusId = "";
+  let activeDetailSessionId = 0;
   let activeDetailAnchor = null;
   let activeDetailImagePreviewController = null;
   let detailHistoryPushed = false;
@@ -1034,7 +1035,43 @@
     return String(status.idstr || status.id || status.mid || status.mblogid || "");
   }
 
-  function getStatusUrl(status) {
+  function getOriginalStatus(status) {
+    let current = status;
+    const visitedIds = new Set();
+    const visitedStatuses = new Set();
+
+    for (let depth = 0; depth < 16; depth += 1) {
+      if (!current || typeof current !== "object" || visitedStatuses.has(current)) {
+        return status;
+      }
+      visitedStatuses.add(current);
+
+      const currentId = getStatusId(current);
+      if (currentId) {
+        if (visitedIds.has(currentId)) {
+          return status;
+        }
+        visitedIds.add(currentId);
+      }
+
+      const next = current.retweeted_status;
+      if (!next) {
+        return current;
+      }
+      if (typeof next !== "object" || next === current) {
+        return status;
+      }
+      const nextId = getStatusId(next);
+      if (nextId && visitedIds.has(nextId)) {
+        return status;
+      }
+      current = next;
+    }
+
+    return status;
+  }
+
+  function getStatusPermalink(status) {
     const userId = status.user?.idstr || status.user?.id;
     const postId = status.mblogid || status.idstr || status.id;
 
@@ -1042,7 +1079,11 @@
       return `https://weibo.com/${encodeURIComponent(userId)}/${encodeURIComponent(postId)}`;
     }
 
-    return "https://weibo.com/";
+    return "";
+  }
+
+  function getStatusUrl(status) {
+    return getStatusPermalink(status) || "https://weibo.com/";
   }
 
   function getProfileUrl(user) {
@@ -4056,8 +4097,9 @@
     return createActionIcon(type, "weibo-grid-reader__comment-zone-icon");
   }
 
-  function createDetailInteractions(status, heading, comments) {
+  function createDetailInteractions(status, heading, comments, contextKey = getStatusId(status)) {
     const statusId = getStatusId(status);
+    const composerId = `weibo-grid-reader-detail-composer-${contextKey || statusId || "current"}`;
     const interactions = document.createElement("div");
     interactions.className = "weibo-grid-reader__detail-interactions";
 
@@ -4067,13 +4109,13 @@
     const repostButton = document.createElement("button");
     repostButton.type = "button";
     repostButton.className = "weibo-grid-reader__detail-action weibo-grid-reader__detail-repost";
-    repostButton.setAttribute("aria-controls", "weibo-grid-reader-detail-composer");
+    repostButton.setAttribute("aria-controls", composerId);
     repostButton.append(createDetailActionIcon("repost"));
 
     const commentButton = document.createElement("button");
     commentButton.type = "button";
     commentButton.className = "weibo-grid-reader__detail-action weibo-grid-reader__detail-comment";
-    commentButton.setAttribute("aria-controls", "weibo-grid-reader-detail-composer");
+    commentButton.setAttribute("aria-controls", composerId);
     commentButton.append(createDetailActionIcon("comment"));
 
     const likeButton = document.createElement("button");
@@ -4087,7 +4129,7 @@
     feedback.setAttribute("aria-live", "polite");
 
     const commentForm = document.createElement("form");
-    commentForm.id = "weibo-grid-reader-detail-composer";
+    commentForm.id = composerId;
     commentForm.className = "weibo-grid-reader__comment-form";
     commentForm.hidden = true;
     const textarea = document.createElement("textarea");
@@ -4369,7 +4411,8 @@
     });
     if (
       !hasValidExtensionContext()
-      || activeDetailStatusId !== statusId
+      || state.detailSessionId !== activeDetailSessionId
+      || !comments.isConnected
       || state.requestVersion !== requestVersion
     ) {
       return;
@@ -4442,10 +4485,12 @@
     }
 
     closeDetailImagePreview(false);
-    const commentList = overlay.querySelector(".weibo-grid-reader__comment-list");
-    detailCommentStates.get(commentList)?.loadMoreObserver?.disconnect();
+    overlay.querySelectorAll(".weibo-grid-reader__comment-list").forEach((commentList) => {
+      detailCommentStates.get(commentList)?.loadMoreObserver?.disconnect();
+    });
     overlay.remove();
     document.documentElement.classList.remove("weibo-grid-reader-detail-open");
+    activeDetailSessionId += 1;
     activeDetailStatusId = "";
     activeDetailAnchor = null;
 
@@ -4557,6 +4602,165 @@
     scrollTarget.scrollLeft += event.deltaX;
   }
 
+  function createDetailCommentContext(status, detailSessionId, contextKey, label) {
+    const panel = document.createElement("section");
+    panel.className = "weibo-grid-reader__comments weibo-grid-reader__detail-comment-context";
+    panel.id = `${DETAIL_ID}-comments-${contextKey}`;
+    panel.dataset.weiboGridCommentContext = contextKey;
+    panel.setAttribute("role", "tabpanel");
+
+    const heading = document.createElement("h2");
+    heading.id = `${panel.id}-heading`;
+    heading.textContent = `评论 ${formatCount(status.comments_count)}`;
+    panel.setAttribute("aria-labelledby", heading.id);
+
+    const comments = document.createElement("div");
+    comments.className = "weibo-grid-reader__comment-list";
+    const loading = document.createElement("p");
+    loading.className = "weibo-grid-reader__comment-empty";
+    loading.textContent = "正在加载评论…";
+    comments.append(loading);
+
+    const detailInteractions = createDetailInteractions(status, heading, comments, contextKey);
+    const loadMoreButton = document.createElement("button");
+    loadMoreButton.type = "button";
+    loadMoreButton.className = "weibo-grid-reader__comment-load-more";
+    loadMoreButton.hidden = true;
+
+    const state = {
+      comments: [],
+      commentIds: new Set(),
+      maxId: "",
+      totalNumber: getNonNegativeCount(status.comments_count),
+      noProgressCount: 0,
+      hasMore: false,
+      loading: false,
+      error: "",
+      errorOnAppend: false,
+      requestVersion: 0,
+      detailSessionId,
+      contextKey,
+      initialized: false,
+      loadMoreButton
+    };
+    detailCommentStates.set(comments, state);
+
+    loadMoreButton.addEventListener("click", () => {
+      const append = state.error ? state.errorOnAppend : true;
+      void loadDetailComments(status, comments, detailInteractions, append);
+    });
+    panel.append(detailInteractions.interactions, heading, comments, loadMoreButton);
+
+    return { key: contextKey, label, status, panel, comments, detailInteractions, state };
+  }
+
+  function createDetailCommentContextSwitcher(contexts, onSelect) {
+    if (contexts.length < 2) {
+      return null;
+    }
+
+    const switcher = document.createElement("div");
+    switcher.className = "weibo-grid-reader__detail-comment-switcher";
+    switcher.setAttribute("role", "tablist");
+    switcher.setAttribute("aria-label", "选择评论来源");
+    const buttons = new Map();
+
+    const setSelected = (activeKey, focus = false) => {
+      for (const context of contexts) {
+        const button = buttons.get(context.key);
+        const selected = context.key === activeKey;
+        button?.setAttribute("aria-selected", String(selected));
+        button?.setAttribute("tabindex", selected ? "0" : "-1");
+        if (selected && focus) {
+          button.focus();
+        }
+      }
+    };
+
+    contexts.forEach((context, contextIndex) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "weibo-grid-reader__detail-comment-tab";
+      button.id = `${DETAIL_ID}-comments-tab-${context.key}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", context.panel.id);
+      button.setAttribute("aria-label", context.label);
+      button.textContent = context.label;
+      context.panel.setAttribute("aria-labelledby", button.id);
+      button.addEventListener("click", () => onSelect(context.key));
+      button.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        const offset = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+        const nextIndex = event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? contexts.length - 1
+            : (contextIndex + offset + contexts.length) % contexts.length;
+        onSelect(contexts[nextIndex].key, { focus: true });
+      });
+      buttons.set(context.key, button);
+      switcher.append(button);
+    });
+
+    setSelected(contexts[0].key);
+    return { element: switcher, setSelected };
+  }
+
+  function createDetailSourceActions(status) {
+    const sourceActions = document.createElement("div");
+    sourceActions.className = "weibo-grid-reader__detail-source-actions";
+
+    const render = (nextStatus) => {
+      sourceActions.replaceChildren();
+
+      const statusPermalink = getStatusPermalink(nextStatus);
+      const original = statusPermalink ? document.createElement("a") : null;
+      if (original) {
+        original.className = "weibo-grid-reader__detail-original";
+        original.href = statusPermalink;
+        original.textContent = "原文";
+      }
+
+      const sourceProfileUrl = getProfileUrl(nextStatus.user);
+      const sourceProfile = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
+      sourceProfile.className = "weibo-grid-reader__detail-source-profile";
+      if (sourceProfileUrl) {
+        sourceProfile.href = sourceProfileUrl;
+        sourceProfile.target = "_blank";
+        sourceProfile.rel = "noopener noreferrer";
+        sourceProfile.setAttribute("aria-label", `打开 ${nextStatus.user?.screen_name || "微博用户"} 的主页`);
+      }
+
+      const sourceAvatar = document.createElement("img");
+      sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
+      sourceAvatar.alt = "";
+      sourceAvatar.src = nextStatus.user?.avatar_hd || nextStatus.user?.avatar_large || nextStatus.user?.profile_image_url || "";
+      sourceAvatar.addEventListener("error", () => sourceProfile.remove(), { once: true });
+      sourceProfile.append(sourceAvatar);
+
+      const sourceName = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
+      sourceName.className = "weibo-grid-reader__detail-source-name";
+      sourceName.textContent = nextStatus.user?.screen_name || "微博用户";
+      sourceName.title = sourceName.textContent;
+      if (sourceProfileUrl) {
+        sourceName.href = sourceProfileUrl;
+        sourceName.target = "_blank";
+        sourceName.rel = "noopener noreferrer";
+      }
+
+      sourceActions.append(sourceProfile, sourceName);
+      if (original) {
+        sourceActions.insertBefore(original, sourceName);
+      }
+    };
+
+    render(status);
+    return { element: sourceActions, setStatus: render };
+  }
+
   function openDetail(status, anchor = null) {
     const statusId = getStatusId(status);
     if (!statusId) {
@@ -4566,7 +4770,20 @@
 
     closeDetail(false);
     activeDetailStatusId = statusId;
+    const detailSessionId = ++activeDetailSessionId;
     activeDetailAnchor = anchor;
+    const originalStatus = getOriginalStatus(status);
+    const repostStatus = status.retweeted_status && typeof status.retweeted_status === "object"
+      ? (originalStatus === status ? status.retweeted_status : originalStatus)
+      : null;
+    const hasRepost = Boolean(repostStatus);
+    const originalStatusId = getStatusId(originalStatus);
+    const hasOriginalCommentContext = Boolean(
+      hasRepost
+      && originalStatus !== status
+      && originalStatusId
+      && originalStatusId !== statusId
+    );
     const scrollPosition = { left: window.scrollX, top: window.scrollY };
 
     const overlay = document.createElement("section");
@@ -4579,11 +4796,11 @@
     const dialog = document.createElement("div");
     dialog.className = "weibo-grid-reader__detail-dialog";
     dialog.dataset.weiboGridDensityColumns = String(settings.columnCount);
-    const detailMedia = createDetailMedia(status.retweeted_status || status);
-    const isTextOnlyDetail = !detailMedia.media && !status.retweeted_status;
+    const detailMedia = createDetailMedia(hasRepost ? repostStatus : status);
+    const isTextOnlyDetail = !detailMedia.media && !hasRepost;
     const main = document.createElement("main");
     main.className = "weibo-grid-reader__detail-main";
-    if (detailMedia.isImage && !status.retweeted_status) {
+    if (detailMedia.isImage && !hasRepost) {
       main.classList.add("weibo-grid-reader__detail-main--image-focus");
       dialog.classList.add("weibo-grid-reader__detail-dialog--image-focus");
     }
@@ -4591,90 +4808,96 @@
       dialog.classList.add("weibo-grid-reader__detail-dialog--text-only");
       dialog.dataset.weiboGridTextSize = getTextOnlyDetailSize(status);
     }
-    const primaryPost = createDetailPost(status, false, status.retweeted_status ? null : detailMedia.media);
+    const primaryPost = createDetailPost(status, false, hasRepost ? null : detailMedia.media);
     main.append(primaryPost);
 
     let repostPost = null;
-    if (status.retweeted_status) {
-      repostPost = createDetailPost(status.retweeted_status, true, detailMedia.media);
+    if (hasRepost) {
+      repostPost = createDetailPost(repostStatus, true, detailMedia.media);
       main.append(repostPost);
     }
     if (detailMedia.rail) {
       (repostPost || primaryPost).append(detailMedia.rail);
     }
 
-    const commentsSection = document.createElement("section");
-    commentsSection.className = "weibo-grid-reader__comments";
-    const heading = document.createElement("h2");
-    heading.textContent = `评论 ${formatCount(status.comments_count)}`;
-    const comments = document.createElement("div");
-    comments.className = "weibo-grid-reader__comment-list";
-    const loading = document.createElement("p");
-    loading.className = "weibo-grid-reader__comment-empty";
-    loading.textContent = "正在加载评论…";
-    comments.append(loading);
-    const detailInteractions = createDetailInteractions(status, heading, comments);
-    const loadMoreButton = document.createElement("button");
-    loadMoreButton.type = "button";
-    loadMoreButton.className = "weibo-grid-reader__comment-load-more";
-    loadMoreButton.hidden = true;
-    loadMoreButton.addEventListener("click", () => {
-      const state = detailCommentStates.get(comments);
-      const append = state?.error ? state.errorOnAppend : true;
-      void loadDetailComments(status, comments, detailInteractions, append);
+    const commentContexts = [
+      createDetailCommentContext(status, detailSessionId, "current", "当前微博")
+    ];
+    if (hasOriginalCommentContext) {
+      commentContexts.push(
+        createDetailCommentContext(originalStatus, detailSessionId, "original", "最初原微博")
+      );
+    }
+    const commentContextsByKey = new Map(commentContexts.map((context) => [context.key, context]));
+    commentContexts.forEach((context, contextIndex) => {
+      context.panel.hidden = contextIndex !== 0;
     });
-    detailCommentStates.set(comments, {
-      comments: [],
-      commentIds: new Set(),
-      maxId: "",
-      totalNumber: getNonNegativeCount(status.comments_count),
-      noProgressCount: 0,
-      hasMore: false,
-      loading: false,
-      error: "",
-      errorOnAppend: false,
-      requestVersion: 0,
-      loadMoreButton
-    });
-    commentsSection.append(detailInteractions.interactions, heading, comments, loadMoreButton);
+
     const side = document.createElement("aside");
     side.className = "weibo-grid-reader__detail-side";
     const sideContent = document.createElement("div");
     sideContent.className = "weibo-grid-reader__detail-side-content";
-    sideContent.append(commentsSection);
+    sideContent.append(...commentContexts.map((context) => context.panel));
+    const sourceActions = createDetailSourceActions(status);
+    const commentScrollPositions = new Map();
+    let activeCommentContextKey = "current";
+    let selectCommentContext = () => {};
+    const contextSwitcher = createDetailCommentContextSwitcher(commentContexts, (key, options) => {
+      selectCommentContext(key, options);
+    });
 
-    const original = document.createElement("a");
-    original.className = "weibo-grid-reader__detail-original";
-    original.href = getStatusUrl(status);
-    original.textContent = "原文";
-    const sourceProfileUrl = getProfileUrl(status.user);
-    const sourceProfile = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
-    sourceProfile.className = "weibo-grid-reader__detail-source-profile";
-    if (sourceProfileUrl) {
-      sourceProfile.href = sourceProfileUrl;
-      sourceProfile.target = "_blank";
-      sourceProfile.rel = "noopener noreferrer";
-      sourceProfile.setAttribute("aria-label", `打开 ${status.user?.screen_name || "微博用户"} 的主页`);
+    const initializeCommentContext = (context) => {
+      if (context.state.initialized) {
+        return;
+      }
+      context.state.initialized = true;
+      void loadDetailComments(context.status, context.comments, context.detailInteractions);
+    };
+
+    selectCommentContext = (key, { focus = false } = {}) => {
+      const nextContext = commentContextsByKey.get(key);
+      if (!nextContext) {
+        return;
+      }
+      if (nextContext.key === activeCommentContextKey) {
+        contextSwitcher?.setSelected(nextContext.key, focus);
+        return;
+      }
+
+      const activeContext = commentContextsByKey.get(activeCommentContextKey);
+      if (activeContext) {
+        commentScrollPositions.set(activeContext.key, sideContent.scrollTop);
+      }
+      activeCommentContextKey = nextContext.key;
+      commentContexts.forEach((context) => {
+        context.panel.hidden = context.key !== nextContext.key;
+      });
+      contextSwitcher?.setSelected(nextContext.key, focus);
+      sourceActions.setStatus(nextContext.status);
+      initializeCommentContext(nextContext);
+      window.requestAnimationFrame(() => {
+        sideContent.scrollTop = commentScrollPositions.get(nextContext.key) || 0;
+        repositionActiveDetail();
+      });
+    };
+
+    if (contextSwitcher) {
+      side.append(contextSwitcher.element);
     }
-    const sourceAvatar = document.createElement("img");
-    sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
-    sourceAvatar.alt = "";
-    sourceAvatar.src = status.user?.avatar_hd || status.user?.avatar_large || status.user?.profile_image_url || "";
-    sourceAvatar.addEventListener("error", () => sourceProfile.remove(), { once: true });
-    sourceProfile.append(sourceAvatar);
-    const sourceName = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
-    sourceName.className = "weibo-grid-reader__detail-source-name";
-    sourceName.textContent = status.user?.screen_name || "微博用户";
-    sourceName.title = sourceName.textContent;
-    if (sourceProfileUrl) {
-      sourceName.href = sourceProfileUrl;
-      sourceName.target = "_blank";
-      sourceName.rel = "noopener noreferrer";
+    side.append(sideContent, sourceActions.element);
+
+    if (hasOriginalCommentContext && repostPost) {
+      const originalCommentContext = commentContextsByKey.get("original");
+      const originalCommentsButton = document.createElement("button");
+      originalCommentsButton.type = "button";
+      originalCommentsButton.className = "weibo-grid-reader__detail-repost-comments";
+      originalCommentsButton.textContent = "查看原微博评论";
+      originalCommentsButton.setAttribute("aria-controls", originalCommentContext.panel.id);
+      originalCommentsButton.addEventListener("click", () => {
+        selectCommentContext("original");
+      });
+      repostPost.append(originalCommentsButton);
     }
-    const sourceActions = document.createElement("div");
-    sourceActions.className = "weibo-grid-reader__detail-source-actions";
-    sourceActions.append(sourceProfile, original, sourceName);
-    side.append(sideContent, sourceActions);
 
     dialog.append(main, side);
     overlay.append(dialog);
@@ -4688,19 +4911,23 @@
     }, { capture: true, passive: false });
     document.documentElement.append(overlay);
     document.documentElement.classList.add("weibo-grid-reader-detail-open");
-    const commentState = detailCommentStates.get(comments);
-    if (commentState && typeof IntersectionObserver === "function") {
-      commentState.loadMoreObserver = new IntersectionObserver((entries) => {
+    commentContexts.forEach((context) => {
+      const { state } = context;
+      if (typeof IntersectionObserver !== "function") {
+        return;
+      }
+      state.loadMoreObserver = new IntersectionObserver((entries) => {
         if (
-          entries.some((entry) => entry.isIntersecting)
-          && commentState.hasMore
-          && !commentState.error
+          !context.panel.hidden
+          && entries.some((entry) => entry.isIntersecting)
+          && state.hasMore
+          && !state.error
         ) {
-          void loadDetailComments(status, comments, detailInteractions, true);
+          void loadDetailComments(context.status, context.comments, context.detailInteractions, true);
         }
       }, { root: sideContent, rootMargin: "180px 0px" });
-      commentState.loadMoreObserver.observe(loadMoreButton);
-    }
+      state.loadMoreObserver.observe(state.loadMoreButton);
+    });
     window.requestAnimationFrame(() => {
       window.scrollTo(scrollPosition.left, scrollPosition.top);
       positionDetailDialog(dialog);
@@ -4715,9 +4942,9 @@
 
     void hydrateDetailLongText(status, primaryPost);
     if (repostPost) {
-      void hydrateDetailLongText(status.retweeted_status, repostPost);
+      void hydrateDetailLongText(repostStatus, repostPost);
     }
-    void loadDetailComments(status, comments, detailInteractions);
+    initializeCommentContext(commentContexts[0]);
   }
 
   function renderStatuses(statuses) {
