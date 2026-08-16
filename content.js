@@ -1695,17 +1695,30 @@
     const link = document.createElement("a");
     const imageViewerLink = isNativeImageLink(href);
     link.className = "weibo-grid-reader__rich-link";
-    link.href = imageViewerLink ? getNativeImageViewerUrl() : href;
-    link.target = imageViewerLink ? "_self" : "_blank";
+    link.href = href;
+    link.target = "_blank";
     link.rel = imageViewerLink || preserveReferrer ? "noopener" : "noopener noreferrer";
     link.textContent = textContent;
     link.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (!imageViewerLink) {
+      if (
+        !imageViewerLink
+        || event.button !== 0
+        || event.metaKey
+        || event.ctrlKey
+        || event.shiftKey
+        || event.altKey
+      ) {
         return;
       }
       event.preventDefault();
-      openNativeImageViewer(href);
+      openDetailImagePreview(getImageVariants(href), {
+        label: "微博图片放大查看",
+        alt: textContent || "微博图片",
+        failureText: "图片暂时无法显示，请在新标签页查看",
+        referrerPolicy: "unsafe-url",
+        variant: "compact"
+      });
     });
     return link;
   }
@@ -1785,7 +1798,7 @@
     }
   }
 
-  function normalizeCommentImageUrl(value) {
+  function normalizeImageUrl(value) {
     const url = new URL(value, window.location.href);
     url.protocol = "https:";
     return url.href;
@@ -1860,19 +1873,20 @@
     });
   }
 
-  function getCommentImageVariants(value) {
-    const normalized = normalizeCommentImageUrl(value);
+  function getImageVariants(value) {
+    const original = getSafeLinkHref(value);
+    const normalized = normalizeImageUrl(original || value);
     if (!isNativeImageLink(normalized)) {
-      return [normalized];
+      return [...new Set([original, normalized].filter(Boolean))];
     }
 
     const url = new URL(normalized);
     const match = url.pathname.match(/^\/(?:original|large|mw\d+|orj\d+|bmiddle|thumbnail|thumb\d+|small|square|wap\d+)\/(.+)$/i);
     if (!match) {
-      return [url.href];
+      return [...new Set([original, url.href].filter(Boolean))];
     }
 
-    const variants = [];
+    const variants = original ? [original] : [];
     for (const size of ["large", "mw2048", "original", "mw1024", "mw690", "bmiddle", "orj360", "thumbnail"]) {
       const candidate = new URL(url.href);
       candidate.pathname = `/${size}/${match[1]}`;
@@ -1927,19 +1941,13 @@
 
     const sources = [];
     for (const directUrl of directUrls) {
-      getCommentImageVariants(directUrl).forEach((variant) => addCommentImageUrl(sources, variant));
+      getImageVariants(directUrl).forEach((variant) => addCommentImageUrl(sources, variant));
     }
-    getCommentImageVariants(value).forEach((variant) => addCommentImageUrl(sources, variant));
+    getImageVariants(value).forEach((variant) => addCommentImageUrl(sources, variant));
     return sources
       .map((url, index) => ({ url, index, rank: getCommentImageQualityRank(url) }))
       .sort((first, second) => second.rank - first.rank || first.index - second.index)
       .map(({ url }) => url);
-  }
-
-  function getNativeImageViewerUrl() {
-    const url = new URL(window.location.href);
-    url.hash = "&viewer";
-    return url.href;
   }
 
   function getComparableImageUrl(value) {
@@ -1954,75 +1962,10 @@
     }
   }
 
-  function getImageResourceKey(value) {
-    try {
-      const url = new URL(value, window.location.href);
-      return /(^|\.)sinaimg\.cn$/i.test(url.hostname)
-        ? url.pathname.split("/").pop() || ""
-        : "";
-    } catch {
-      return "";
-    }
-  }
-
-  function isExtensionElement(element) {
-    return Boolean(
-      getExtensionRoot()?.contains(element)
-      || getReaderSurface()?.contains(element)
-      || getDetailOverlay()?.contains(element)
-    );
-  }
-
-  function findNativeImageTrigger(imageUrl) {
-    const comparableUrl = getComparableImageUrl(imageUrl);
-    const resourceKey = getImageResourceKey(imageUrl);
-
-    for (const link of document.querySelectorAll("a[href]")) {
-      if (isExtensionElement(link)) {
-        continue;
-      }
-      if (getComparableImageUrl(link.href) === comparableUrl) {
-        return link;
-      }
-    }
-
-    if (!resourceKey) {
-      return null;
-    }
-
-    for (const image of document.querySelectorAll("img[src]")) {
-      if (isExtensionElement(image) || getImageResourceKey(image.currentSrc || image.src) !== resourceKey) {
-        continue;
-      }
-      return image.closest("a, .woo-picture-main, .woo-picture-hover") || image;
-    }
-
-    return null;
-  }
-
-  function openNativeImageViewer(imageUrl) {
-    const trigger = findNativeImageTrigger(imageUrl);
-    if (trigger) {
-      const cancelDirectNavigation = (event) => {
-        if (event.composedPath().includes(trigger)) {
-          event.preventDefault();
-        }
-      };
-      document.addEventListener("click", cancelDirectNavigation, { capture: true, once: true });
-      trigger.click();
-    }
-
-    window.setTimeout(() => {
-      if (!window.location.hash.includes("viewer")) {
-        window.location.assign(getNativeImageViewerUrl());
-      }
-    }, 60);
-  }
-
   function closeDetailImagePreview(restoreFocus = true) {
     const controller = activeDetailImagePreviewController;
     const layer = controller?.layer
-      || getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer");
+      || document.querySelector(".weibo-grid-reader__comment-image-preview-layer");
     if (!layer) {
       return;
     }
@@ -2030,6 +1973,7 @@
     activeDetailImagePreviewController = null;
     controller?.destroy?.();
     layer.remove();
+    document.documentElement.classList.remove("weibo-grid-reader-image-preview-open");
     if (restoreFocus && controller?.returnFocus instanceof HTMLElement && controller.returnFocus.isConnected) {
       controller.returnFocus.focus({ preventScroll: true });
     }
@@ -2041,18 +1985,29 @@
       label = "图片放大查看",
       alt = "图片",
       failureText = "图片暂时无法显示",
-      referrerPolicy = ""
+      referrerPolicy = "",
+      variant = "full"
     } = {}
   ) {
-    const overlay = getDetailOverlay();
-    if (!overlay?.querySelector(".weibo-grid-reader__detail-dialog")) {
-      return;
-    }
+    const detailOverlay = getDetailOverlay();
+    const previewHost = detailOverlay?.querySelector(".weibo-grid-reader__detail-dialog")
+      ? detailOverlay
+      : document.body;
+    const isStandalone = previewHost === document.body;
+    const isCompact = variant === "compact";
+    const useCardLayout = isStandalone || isCompact;
+    const previewSources = [...new Set(
+      (Array.isArray(imageSources) ? imageSources : [])
+        .map((source) => getSafeLinkHref(source))
+        .filter(Boolean)
+    )];
 
     const returnFocus = document.activeElement;
     closeDetailImagePreview(false);
     const layer = document.createElement("section");
     layer.className = "weibo-grid-reader__comment-image-preview-layer";
+    layer.classList.toggle("weibo-grid-reader__comment-image-preview-layer--standalone", isStandalone);
+    layer.classList.toggle("weibo-grid-reader__comment-image-preview-layer--compact", isCompact);
     layer.setAttribute("role", "dialog");
     layer.setAttribute("aria-modal", "true");
     layer.setAttribute("aria-label", label);
@@ -2088,6 +2043,10 @@
     zoomOut.disabled = true;
     zoomIn.disabled = true;
     fit.disabled = true;
+
+    const loading = document.createElement("p");
+    loading.className = "weibo-grid-reader__image-preview-loading";
+    loading.textContent = "正在加载图片…";
 
     const image = document.createElement("img");
     image.className = "weibo-grid-reader__comment-image-preview-full";
@@ -2169,10 +2128,34 @@
       didDrag = false;
       layer.classList.remove("weibo-grid-reader__comment-image-preview-layer--dragging");
     };
+    const showFailure = () => {
+      const failure = document.createElement("p");
+      failure.className = "weibo-grid-reader__image-preview-error";
+      failure.setAttribute("role", "alert");
+      failure.append(failureText);
+      if (previewSources[0]) {
+        const originalLink = document.createElement("a");
+        originalLink.href = previewSources[0];
+        originalLink.target = "_blank";
+        originalLink.rel = "noopener";
+        originalLink.textContent = "在新标签页打开原图";
+        originalLink.setAttribute("aria-label", "在新标签页打开原图");
+        failure.append(document.createElement("br"), originalLink);
+      }
+      loading.remove();
+      image.replaceWith(failure);
+      toolbar.hidden = true;
+    };
     const loadSource = () => {
-      image.src = imageSources[sourceIndex] || "";
+      const source = previewSources[sourceIndex];
+      if (!source) {
+        showFailure();
+        return;
+      }
+      image.src = source;
     };
     image.addEventListener("load", () => {
+      loading.remove();
       scale = 1;
       panX = 0;
       panY = 0;
@@ -2181,15 +2164,12 @@
     });
     image.addEventListener("error", () => {
       sourceIndex += 1;
-      if (sourceIndex < imageSources.length) {
+      if (sourceIndex < previewSources.length) {
+        loading.textContent = "正在尝试备用图片…";
         loadSource();
         return;
       }
-      const failure = document.createElement("p");
-      failure.className = "weibo-grid-reader__image-preview-error";
-      failure.textContent = failureText;
-      image.replaceWith(failure);
-      toolbar.hidden = true;
+      showFailure();
     });
 
     zoomOut.addEventListener("click", () => setScale(scale - DETAIL_IMAGE_PREVIEW_ZOOM_STEP));
@@ -2257,9 +2237,14 @@
       }
     });
 
-    stage.append(image);
+    stage.append(loading, image);
     viewport.append(stage);
-    layer.append(viewport, toolbar, close);
+    if (useCardLayout) {
+      viewport.append(toolbar, close);
+      layer.append(viewport);
+    } else {
+      layer.append(viewport, toolbar, close);
+    }
     layer.addEventListener("click", (event) => {
       if (event.target === image) {
         if (performance.now() < suppressImageClickUntil) {
@@ -2278,7 +2263,10 @@
         closeDetailImagePreview();
       }
     });
-    overlay.append(layer);
+    previewHost.append(layer);
+    if (isStandalone) {
+      document.documentElement.classList.add("weibo-grid-reader-image-preview-open");
+    }
     if (typeof ResizeObserver === "function") {
       resizeObserver = new ResizeObserver(layoutFittedImage);
       resizeObserver.observe(viewport);
@@ -2286,6 +2274,7 @@
     activeDetailImagePreviewController = {
       layer,
       returnFocus,
+      isStandalone,
       destroy: () => {
         resizeObserver?.disconnect();
         endDrag();
@@ -2308,7 +2297,8 @@
       label: "评论图片放大查看",
       alt: "评论图片",
       failureText: "评论图片暂时无法显示",
-      referrerPolicy: "unsafe-url"
+      referrerPolicy: "unsafe-url",
+      variant: "compact"
     }));
     const image = document.createElement("img");
     image.alt = "评论图片";
@@ -5633,7 +5623,7 @@
     });
     window.addEventListener("hashchange", refreshPage);
     window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && getDetailOverlay()?.querySelector(".weibo-grid-reader__comment-image-preview-layer")) {
+      if (event.key === "Escape" && activeDetailImagePreviewController?.layer.isConnected) {
         closeDetailImagePreview();
         return;
       }

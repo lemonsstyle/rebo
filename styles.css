@@ -440,6 +440,10 @@ html.weibo-grid-reader-detail-open {
   overscroll-behavior: none;
 }
 
+html.weibo-grid-reader-image-preview-open {
+  overscroll-behavior: none;
+}
+
 .weibo-grid-reader__detail-overlay {
   background: rgb(17 20 24 / 17%);
   display: block;
@@ -1410,6 +1414,28 @@ html.weibo-grid-reader-detail-open {
   z-index: 5;
 }
 
+.weibo-grid-reader__comment-image-preview-layer--standalone,
+.weibo-grid-reader__comment-image-preview-layer--compact {
+  align-items: center;
+  background: rgb(17 20 24 / 38%);
+  display: grid;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  z-index: 2147483003;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-viewport,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-viewport {
+  background: #101216;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 34%);
+  height: min(580px, calc(100vh - 96px));
+  inset: auto;
+  position: relative;
+  width: min(720px, calc(100vw - 48px));
+}
+
 .weibo-grid-reader__image-preview-viewport {
   inset: max(28px, env(safe-area-inset-top)) max(40px, env(safe-area-inset-right)) 88px max(40px, env(safe-area-inset-left));
   overflow: hidden;
@@ -1442,6 +1468,18 @@ html.weibo-grid-reader-detail-open {
 
 .weibo-grid-reader__comment-image-preview-layer--loaded .weibo-grid-reader__comment-image-preview-full {
   opacity: 1;
+}
+
+.weibo-grid-reader__image-preview-loading {
+  align-items: center;
+  color: rgb(255 255 255 / 72%);
+  display: grid;
+  font-size: 14px;
+  inset: 0;
+  margin: 0;
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .weibo-grid-reader__comment-image-preview-layer--zoomed .weibo-grid-reader__comment-image-preview-full {
@@ -1530,7 +1568,20 @@ html.weibo-grid-reader-detail-open {
 .weibo-grid-reader__image-preview-error {
   color: rgb(255 255 255 / 82%);
   font-size: 14px;
+  line-height: 1.7;
   margin: 0;
+  text-align: center;
+}
+
+.weibo-grid-reader__image-preview-error a {
+  color: #ffd0a3;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.weibo-grid-reader__image-preview-error a:hover,
+.weibo-grid-reader__image-preview-error a:focus-visible {
+  color: #fff;
 }
 
 .weibo-grid-reader__comment span,
