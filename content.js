@@ -3505,6 +3505,46 @@
     return "standard";
   }
 
+  // 详情正文顶部的博主头像 + 昵称头部：让左侧不再一上来就是正文，与卡片头部风格
+  // 一致；头像和昵称在有用户 ID 时链接到该博主主页。这块信息此前放在右下角的
+  // “资料操作栏”里（连同已删除的“原文”按钮），现统一上移到正文头部。
+  function createDetailAuthorHeader(status) {
+    const profileUrl = getProfileUrl(status.user);
+    const screenName = status.user?.screen_name || "微博用户";
+
+    const header = document.createElement("div");
+    header.className = "weibo-grid-reader__detail-author";
+
+    const avatarLink = profileUrl ? document.createElement("a") : document.createElement("span");
+    avatarLink.className = "weibo-grid-reader__detail-author-avatar-link";
+    if (profileUrl) {
+      avatarLink.href = profileUrl;
+      avatarLink.target = "_blank";
+      avatarLink.rel = "noopener noreferrer";
+      avatarLink.setAttribute("aria-label", `打开 ${screenName} 的主页`);
+    }
+
+    const avatar = document.createElement("img");
+    avatar.className = "weibo-grid-reader__detail-author-avatar";
+    avatar.alt = "";
+    avatar.src = status.user?.avatar_hd || status.user?.avatar_large || status.user?.profile_image_url || "";
+    avatar.addEventListener("error", () => avatarLink.remove(), { once: true });
+    avatarLink.append(avatar);
+
+    const name = profileUrl ? document.createElement("a") : document.createElement("strong");
+    name.className = "weibo-grid-reader__detail-author-name";
+    name.textContent = screenName;
+    name.title = screenName;
+    if (profileUrl) {
+      name.href = profileUrl;
+      name.target = "_blank";
+      name.rel = "noopener noreferrer";
+    }
+
+    header.append(avatarLink, name);
+    return header;
+  }
+
   function createDetailPost(status, isRepost = false, media = undefined) {
     const post = document.createElement("article");
     post.className = isRepost
@@ -3522,6 +3562,8 @@
         repostAuthor.rel = "noopener noreferrer";
       }
       post.append(repostAuthor);
+    } else {
+      post.append(createDetailAuthorHeader(status));
     }
 
     post.append(createDetailText(status));
@@ -3643,6 +3685,23 @@
       || picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-panel");
   }
 
+  // 表情面板为固定定位浮层。若把它留在带 transform 的祖先（如详情对话框，其开场
+  // 动画 fill-mode 为 both，结束后仍保留 scale(1)）内部，fixed 会以该祖先而非视口作为
+  // 包含块，导致按视口坐标计算的 left/top 被整体偏移。这里在展开前把 portal 面板重新
+  // 挂到解析出的顶层宿主（详情内为详情遮罩，否则为扩展根节点），使其始终相对视口定位。
+  function ensureCommentEmojiPanelHost(panel) {
+    if (!panel || panel.dataset.weiboGridEmojiPortal !== "true") {
+      return;
+    }
+    const resolver = panel.__weiboGridResolvePortalHost;
+    const host = (typeof resolver === "function" && resolver())
+      || getExtensionRoot()
+      || document.body;
+    if (host && panel.parentNode !== host) {
+      host.append(panel);
+    }
+  }
+
   function setCommentEmojiPickerOpen(picker, open) {
     const panel = getCommentEmojiPanel(picker);
     const trigger = picker.querySelector(":scope > .weibo-grid-reader__comment-emoji-trigger");
@@ -3653,6 +3712,7 @@
     panel.hidden = !open;
     trigger.setAttribute("aria-expanded", String(open));
     if (open) {
+      ensureCommentEmojiPanelHost(panel);
       positionCommentEmojiPanel(panel, trigger);
     }
   }
@@ -3667,7 +3727,7 @@
     }
   }
 
-  function createCommentEmojiPicker(textarea, { portal = false } = {}) {
+  function createCommentEmojiPicker(textarea, { portal = false, resolvePortalHost = null } = {}) {
     const picker = document.createElement("div");
     picker.className = "weibo-grid-reader__comment-emoji-picker";
     picker.dataset.open = "false";
@@ -3731,10 +3791,16 @@
     picker.__weiboGridEmojiPanel = panel;
     if (portal) {
       // 卡片为了瀑布流定位带有 transform 且裁切溢出内容；将其表情面板挂到
-      // 扩展根节点，固定定位才会相对视口计算，也不会被卡片裁掉。
+      // 扩展根节点，固定定位才会相对视口计算，也不会被卡片裁掉。详情对话框同样
+      // 带 transform，需通过 resolvePortalHost 指向详情遮罩，避免面板被对话框的
+      // 包含块整体偏移。宿主延迟到展开时由 ensureCommentEmojiPanelHost 解析并挂载：
+      // 既兼容面板先于遮罩创建的情况，也让从未展开的面板保持游离、随所属 picker
+      // 一起被回收，不会在持久的宿主节点里堆积隐藏残留。
       panel.dataset.weiboGridEmojiPortal = "true";
       panel.__weiboGridEmojiPicker = picker;
-      (getExtensionRoot() || document.body).append(panel);
+      panel.__weiboGridResolvePortalHost = typeof resolvePortalHost === "function"
+        ? resolvePortalHost
+        : () => getExtensionRoot() || document.body;
       picker.append(summary);
     } else {
       picker.append(summary, panel);
@@ -3773,7 +3839,10 @@
     textarea.maxLength = 140;
     textarea.placeholder = `回复 @${comment.user?.screen_name || "微博用户"}`;
 
-    const emojiPicker = createCommentEmojiPicker(textarea);
+    const emojiPicker = createCommentEmojiPicker(textarea, {
+      portal: true,
+      resolvePortalHost: () => getDetailOverlay() || getExtensionRoot() || document.body
+    });
 
     const footer = document.createElement("div");
     footer.className = "weibo-grid-reader__comment-inline-reply-footer";
@@ -4127,7 +4196,10 @@
     textarea.name = "comment";
     textarea.rows = 3;
     textarea.maxLength = 140;
-    const emojiPicker = createCommentEmojiPicker(textarea);
+    const emojiPicker = createCommentEmojiPicker(textarea, {
+      portal: true,
+      resolvePortalHost: () => getDetailOverlay() || getExtensionRoot() || document.body
+    });
     const formFooter = document.createElement("div");
     formFooter.className = "weibo-grid-reader__comment-form-footer";
     const count = document.createElement("span");
@@ -4540,15 +4612,15 @@
       return;
     }
 
+    // 表情面板作为固定定位浮层被移出对话框、挂在详情遮罩下（见
+    // ensureCommentEmojiPanelHost）；遮罩上的捕获式 wheel 仍会命中它，但它不再是
+    // dialog 的后代，因此只按面板本身判定，滚轮优先滚动表情网格并消费该事件。
     const emojiPanel = origin?.closest(".weibo-grid-reader__comment-emoji-panel");
-    if (emojiPanel && dialog.contains(emojiPanel)) {
+    if (emojiPanel) {
       const emojiGrid = emojiPanel.querySelector(".weibo-grid-reader__comment-emoji-grid");
-      const sideContent = emojiPanel.closest(".weibo-grid-reader__detail-side-content");
       event.preventDefault();
       if (canScrollVertically(emojiGrid, event.deltaY)) {
         emojiGrid.scrollTop += event.deltaY;
-      } else if (sideContent) {
-        sideContent.scrollTop += event.deltaY;
       }
       return;
     }
@@ -4699,58 +4771,6 @@
     return { element: switcher, setSelected };
   }
 
-  function createDetailSourceActions(status) {
-    const sourceActions = document.createElement("div");
-    sourceActions.className = "weibo-grid-reader__detail-source-actions";
-
-    const render = (nextStatus) => {
-      sourceActions.replaceChildren();
-
-      const statusPermalink = getStatusPermalink(nextStatus);
-      const original = statusPermalink ? document.createElement("a") : null;
-      if (original) {
-        original.className = "weibo-grid-reader__detail-original";
-        original.href = statusPermalink;
-        original.textContent = "原文";
-      }
-
-      const sourceProfileUrl = getProfileUrl(nextStatus.user);
-      const sourceProfile = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
-      sourceProfile.className = "weibo-grid-reader__detail-source-profile";
-      if (sourceProfileUrl) {
-        sourceProfile.href = sourceProfileUrl;
-        sourceProfile.target = "_blank";
-        sourceProfile.rel = "noopener noreferrer";
-        sourceProfile.setAttribute("aria-label", `打开 ${nextStatus.user?.screen_name || "微博用户"} 的主页`);
-      }
-
-      const sourceAvatar = document.createElement("img");
-      sourceAvatar.className = "weibo-grid-reader__detail-source-avatar";
-      sourceAvatar.alt = "";
-      sourceAvatar.src = nextStatus.user?.avatar_hd || nextStatus.user?.avatar_large || nextStatus.user?.profile_image_url || "";
-      sourceAvatar.addEventListener("error", () => sourceProfile.remove(), { once: true });
-      sourceProfile.append(sourceAvatar);
-
-      const sourceName = sourceProfileUrl ? document.createElement("a") : document.createElement("span");
-      sourceName.className = "weibo-grid-reader__detail-source-name";
-      sourceName.textContent = nextStatus.user?.screen_name || "微博用户";
-      sourceName.title = sourceName.textContent;
-      if (sourceProfileUrl) {
-        sourceName.href = sourceProfileUrl;
-        sourceName.target = "_blank";
-        sourceName.rel = "noopener noreferrer";
-      }
-
-      sourceActions.append(sourceProfile, sourceName);
-      if (original) {
-        sourceActions.insertBefore(original, sourceName);
-      }
-    };
-
-    render(status);
-    return { element: sourceActions, setStatus: render };
-  }
-
   function openDetail(status, anchor = null) {
     const statusId = getStatusId(status);
     if (!statusId) {
@@ -4828,7 +4848,6 @@
     const sideContent = document.createElement("div");
     sideContent.className = "weibo-grid-reader__detail-side-content";
     sideContent.append(...commentContexts.map((context) => context.panel));
-    const sourceActions = createDetailSourceActions(status);
     const commentScrollPositions = new Map();
     let activeCommentContextKey = "current";
     let selectCommentContext = () => {};
@@ -4863,7 +4882,6 @@
         context.panel.hidden = context.key !== nextContext.key;
       });
       contextSwitcher?.setSelected(nextContext.key, focus);
-      sourceActions.setStatus(nextContext.status);
       initializeCommentContext(nextContext);
       window.requestAnimationFrame(() => {
         sideContent.scrollTop = commentScrollPositions.get(nextContext.key) || 0;
@@ -4874,7 +4892,7 @@
     if (contextSwitcher) {
       side.append(contextSwitcher.element);
     }
-    side.append(sideContent, sourceActions.element);
+    side.append(sideContent);
 
     if (hasOriginalCommentContext && repostPost) {
       const originalCommentContext = commentContextsByKey.get("original");
