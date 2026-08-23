@@ -3244,6 +3244,7 @@
       repostButton.disabled = composerPending;
       commentButton.disabled = composerPending;
       textarea.disabled = composerPending;
+      emojiPicker.querySelector(".weibo-grid-reader__comment-emoji-trigger").disabled = composerPending;
       linkedAction.input.disabled = composerPending;
       cancel.disabled = composerPending;
       count.textContent = `${textarea.value.length}/140`;
@@ -4423,6 +4424,8 @@
       resolvePortalHost: () => getDetailOverlay() || getExtensionRoot() || document.body
     });
     const linkedAction = createLinkedActionOption();
+    const formMeta = document.createElement("div");
+    formMeta.className = "weibo-grid-reader__comment-form-meta";
     const formFooter = document.createElement("div");
     formFooter.className = "weibo-grid-reader__comment-form-footer";
     const count = document.createElement("span");
@@ -4434,8 +4437,9 @@
     const submit = document.createElement("button");
     submit.type = "submit";
     submit.className = "weibo-grid-reader__comment-submit";
-    formFooter.append(linkedAction.label, count, cancel, submit);
-    commentForm.append(textarea, emojiPicker, formFooter);
+    formMeta.append(emojiPicker, linkedAction.label, count);
+    formFooter.append(cancel, submit);
+    commentForm.append(textarea, formMeta, formFooter);
 
     let attitudePending = false;
     let composerPending = false;
@@ -4469,6 +4473,7 @@
       repostButton.disabled = composerPending;
       commentButton.disabled = composerPending;
       textarea.disabled = composerPending;
+      emojiPicker.querySelector(".weibo-grid-reader__comment-emoji-trigger").disabled = composerPending;
       linkedAction.input.disabled = composerPending;
       cancel.disabled = composerPending;
       count.textContent = `${textarea.value.length}/140`;

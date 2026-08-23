@@ -1038,6 +1038,11 @@ html.weibo-grid-reader-image-preview-open {
   color: #9e4200;
 }
 
+.weibo-grid-reader__comment-emoji-trigger:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
 .weibo-grid-reader__comment-input:disabled + .weibo-grid-reader__comment-emoji-picker,
 .weibo-grid-reader__comment-inline-reply-input:disabled + .weibo-grid-reader__comment-emoji-picker {
   opacity: 0.55;
@@ -1117,11 +1122,26 @@ html.weibo-grid-reader-image-preview-open {
   min-height: 1.2em;
 }
 
+.weibo-grid-reader__comment-form-meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__comment-form-meta .weibo-grid-reader__comment-emoji-picker {
+  flex: 0 0 auto;
+}
+
+.weibo-grid-reader__comment-form-meta .weibo-grid-reader__comment-form-count {
+  margin-left: auto;
+}
+
 .weibo-grid-reader__comment-form-footer {
   align-items: center;
   display: flex;
-  gap: 7px;
-  justify-content: space-between;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .weibo-grid-reader__linked-action-option {
@@ -1154,12 +1174,14 @@ html.weibo-grid-reader-image-preview-open {
 .weibo-grid-reader__comment-form-count {
   color: #a39384;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .weibo-grid-reader__comment-submit {
   background: #f47a11;
   border-color: #f47a11;
   color: #fff;
+  white-space: nowrap;
 }
 
 .weibo-grid-reader__comment-submit:disabled {
@@ -1171,7 +1193,8 @@ html.weibo-grid-reader-image-preview-open {
 .weibo-grid-reader__detail-composer-cancel {
   border-color: transparent;
   color: #8f7865;
-  margin-left: auto;
+  margin-left: 0;
+  white-space: nowrap;
 }
 
 .weibo-grid-reader__comment-list {
