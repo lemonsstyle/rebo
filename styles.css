@@ -533,6 +533,14 @@ html.weibo-grid-reader-image-preview-open {
   border-top: 1px solid #f2e7d9;
 }
 
+.weibo-grid-reader__detail-dialog--no-comments {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.weibo-grid-reader__detail-side[hidden] {
+  display: none;
+}
+
 .weibo-grid-reader__detail-dialog--image-focus {
   height: min(var(--weibo-grid-detail-height), calc(100vh - 28px));
 }
@@ -1470,8 +1478,12 @@ html.weibo-grid-reader-image-preview-open {
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgb(0 0 0 / 34%);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: min(580px, calc(100vh - 96px));
   inset: auto;
+  padding: 12px;
   position: relative;
   width: min(720px, calc(100vw - 48px));
 }
@@ -1482,13 +1494,25 @@ html.weibo-grid-reader-image-preview-open {
   position: absolute;
 }
 
+.weibo-grid-reader__comment-image-preview-layer--gallery .weibo-grid-reader__image-preview-viewport {
+  bottom: 158px;
+}
+
 .weibo-grid-reader__image-preview-stage {
   align-items: center;
   display: flex;
   height: 100%;
   justify-content: center;
   overflow: hidden;
+  position: relative;
   width: 100%;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-stage,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-stage {
+  border-radius: 12px;
+  height: auto;
+  min-height: 0;
 }
 
 .weibo-grid-reader__comment-image-preview-full {
@@ -1504,6 +1528,14 @@ html.weibo-grid-reader-image-preview-open {
   transition: opacity 120ms ease, transform 120ms ease;
   user-select: none;
   will-change: transform;
+}
+
+.weibo-grid-reader__comment-image-preview-layer[data-image-zone="previous"] .weibo-grid-reader__comment-image-preview-full {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 12l7-7v5h11v4H10v5z' fill='%23ffffff' stroke='%23252525' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, w-resize;
+}
+
+.weibo-grid-reader__comment-image-preview-layer[data-image-zone="next"] .weibo-grid-reader__comment-image-preview-full {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M21 12l-7-7v5H3v4h11v5z' fill='%23ffffff' stroke='%23252525' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, e-resize;
 }
 
 .weibo-grid-reader__comment-image-preview-layer--loaded .weibo-grid-reader__comment-image-preview-full {
@@ -1572,6 +1604,83 @@ html.weibo-grid-reader-image-preview-open {
   position: absolute;
   transform: translateX(-50%);
   z-index: 1;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-toolbar,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-toolbar {
+  bottom: auto;
+  justify-self: center;
+  left: auto;
+  margin-top: 12px;
+  position: static;
+  transform: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnails {
+  align-items: center;
+  background: rgb(28 31 36 / 86%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 14px;
+  bottom: max(76px, calc(env(safe-area-inset-bottom) + 76px));
+  box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+  display: flex;
+  gap: 8px;
+  left: 50%;
+  max-width: min(620px, calc(100vw - 80px));
+  padding: 7px 9px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.weibo-grid-reader__image-preview-thumbnails[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__image-preview-counter {
+  color: rgb(255 255 255 / 78%);
+  flex: 0 0 auto;
+  font-size: 12px;
+  min-width: 38px;
+  text-align: center;
+}
+
+.weibo-grid-reader__image-preview-thumbnail-list {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnail-list::-webkit-scrollbar {
+  display: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnail {
+  background: #202329;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 46px;
+  overflow: hidden;
+  padding: 0;
+  width: 46px;
+}
+
+.weibo-grid-reader__image-preview-thumbnail:hover,
+.weibo-grid-reader__image-preview-thumbnail:focus-visible,
+.weibo-grid-reader__image-preview-thumbnail--active {
+  border-color: #ff9f0a;
+}
+
+.weibo-grid-reader__image-preview-thumbnail img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .weibo-grid-reader__image-preview-control {
@@ -3179,34 +3288,13 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-foote
   color: #c75b00;
 }
 
-.weibo-grid-reader__detail-comment-tab:focus-visible,
-.weibo-grid-reader__detail-repost-comments:focus-visible {
+.weibo-grid-reader__detail-comment-tab:focus-visible {
   outline: 2px solid #ff8200;
   outline-offset: 2px;
 }
 
 .weibo-grid-reader__detail-comment-context[hidden] {
   display: none;
-}
-
-.weibo-grid-reader__detail-repost-comments {
-  align-self: start;
-  background: transparent;
-  border: 1px solid #e6c5a4;
-  border-radius: 8px;
-  color: #e66d00;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 9px;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-}
-
-.weibo-grid-reader__detail-repost-comments:hover {
-  background: #fff1e2;
-  border-color: #ff8200;
-  color: #c75b00;
 }
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-switcher {
@@ -3229,20 +3317,8 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-tab:hover {
   color: #ff9f0a;
 }
 
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost-comments {
-  border-color: #76543a;
-  color: #ff9f0a;
-}
-
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost-comments:hover {
-  background: #493426;
-  border-color: #b4692d;
-  color: #ffc18b;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .weibo-grid-reader__detail-comment-tab,
-  .weibo-grid-reader__detail-repost-comments {
+  .weibo-grid-reader__detail-comment-tab {
     transition-duration: 0ms;
   }
 }
