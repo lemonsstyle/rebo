@@ -622,7 +622,7 @@
     }
   }
 
-  async function createComment(statusId, text) {
+  async function createComment(statusId, text, alsoRepost = false) {
     const comment = String(text || "").trim();
     if (!statusId || !comment) {
       return { ok: false, reason: "评论内容不能为空。" };
@@ -633,7 +633,7 @@
       {
         id: String(statusId),
         comment,
-        is_repost: 0,
+        is_repost: alsoRepost ? 1 : 0,
         comment_ori: 0,
         is_comment: 0
       },
@@ -694,7 +694,7 @@
     );
   }
 
-  async function createRepost(statusId, text) {
+  async function createRepost(statusId, text, alsoComment = false) {
     if (!statusId) {
       return { ok: false, reason: "缺少微博 ID，无法转发。" };
     }
@@ -706,7 +706,7 @@
         comment: String(text || "").trim(),
         is_repost: 0,
         comment_ori: 0,
-        is_comment: 0,
+        is_comment: alsoComment ? 1 : 0,
         visible: 0
       },
       "weibo-comment-repost"
@@ -777,13 +777,13 @@
     }
 
     if (message.type === "create-comment") {
-      void createComment(message.statusId, message.text).then((result) => {
+      void createComment(message.statusId, message.text, message.alsoRepost).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }
 
     if (message.type === "create-repost") {
-      void createRepost(message.statusId, message.text).then((result) => {
+      void createRepost(message.statusId, message.text, message.alsoComment).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }

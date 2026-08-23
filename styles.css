@@ -1124,6 +1124,33 @@ html.weibo-grid-reader-image-preview-open {
   justify-content: space-between;
 }
 
+.weibo-grid-reader__linked-action-option {
+  align-items: center;
+  color: #806b59;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__linked-action-option[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__linked-action-option input {
+  accent-color: #f47a11;
+  height: 14px;
+  margin: 0;
+  width: 14px;
+}
+
+.weibo-grid-reader__linked-action-option:has(input:disabled) {
+  cursor: progress;
+  opacity: 0.62;
+}
+
 .weibo-grid-reader__comment-form-count {
   color: #a39384;
   font-size: 11px;
@@ -1152,26 +1179,13 @@ html.weibo-grid-reader-image-preview-open {
   gap: 0;
 }
 
-.weibo-grid-reader__comment-load-more {
-  background: transparent;
-  border: 1px solid #ead7c4;
-  border-radius: 999px;
-  color: #b15e22;
-  cursor: pointer;
-  display: block;
-  font: inherit;
-  font-size: 12px;
-  margin: 14px auto 0;
-  padding: 7px 16px;
+.weibo-grid-reader__comment-load-sentinel {
+  height: 1px;
+  pointer-events: none;
 }
 
-.weibo-grid-reader__comment-load-more:hover {
-  background: #fff2e5;
-}
-
-.weibo-grid-reader__comment-load-more:disabled {
-  cursor: progress;
-  opacity: 0.62;
+.weibo-grid-reader__comment-load-sentinel[hidden] {
+  display: none;
 }
 
 .weibo-grid-reader__comment {
@@ -2450,8 +2464,7 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel:hover
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button:hover:not(:disabled),
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger:hover,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option:hover,
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-load-more:hover {
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option:hover {
   background: #493426;
   border-color: #b4692d;
   color: #ffc18b;
@@ -2506,9 +2519,8 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone {
   color: #b8aaa0;
 }
 
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-load-more {
-  border-color: #604a3a;
-  color: #f0a469;
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__linked-action-option {
+  color: #c7bbb2;
 }
 
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment {

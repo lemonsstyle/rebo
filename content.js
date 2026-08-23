@@ -41,8 +41,9 @@
   const COMMENT_ACTIONS_REVEAL_DELAY_MS = 120;
   // 微博网页版的表情面板会把选中的表情作为 `[名称]` 文本插入评论输入框，
   // /ajax/comments/create 与 /ajax/comments/reply 仍沿用原来的 comment 字段。
-  // 这里使用当前官方“PC 热门表情”中的常用项和同一套静态资源，避免新增接口、
-  // 权限或第三方依赖；即使图片资源暂时不可用，按钮仍会回退为表情名称。
+  // 这里以内置的官方“PC 热门表情”作为基础目录，并在页面渲染过程中动态收集
+  // 当前微博和评论里实际出现的官方表情；避免依赖需要登录态的额外配置接口。
+  // 即使图片资源暂时不可用，按钮仍会回退为表情名称。
   const COMMENT_EMOJIS = Object.freeze([
     ["微笑", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/f4/201810_hehe_mobile.png"],
     ["可爱", "https://face.t.sinajs.cn/t4/appstyle/expression/ext/normal/78/201810_keai_mobile.png"],
@@ -134,6 +135,7 @@
   const COMMENT_EMOJI_BY_TOKEN = new Map(
     COMMENT_EMOJIS.map((emoji) => [`[${emoji.name}]`, emoji])
   );
+  const DISCOVERED_COMMENT_EMOJIS = new Map();
 
   let settings = { ...DEFAULT_SETTINGS };
   let drawerOpen = false;
@@ -1723,13 +1725,54 @@
     return link;
   }
 
-  function getCommentEmoji(value) {
-    const normalizedToken = String(value || "")
+  function normalizeCommentEmojiToken(value) {
+    return String(value || "")
       .replace(/[\u200b-\u200d\ufeff]/g, "")
       .replace(/^［/, "[")
       .replace(/］$/, "]")
       .replace(/\s+/g, "")
       .trim();
+  }
+
+  function registerDiscoveredCommentEmoji(value, src) {
+    const normalizedToken = normalizeCommentEmojiToken(value);
+    const match = normalizedToken.match(/^\[([^\[\]]{1,24})\]$/);
+    const safeSource = getSafeLinkHref(src);
+    if (!match || !safeSource || COMMENT_EMOJI_BY_TOKEN.has(normalizedToken)) {
+      return;
+    }
+
+    const emoji = Object.freeze({
+      name: match[1],
+      src: safeSource,
+      fallbackSources: Object.freeze([])
+    });
+    DISCOVERED_COMMENT_EMOJIS.set(normalizedToken, emoji);
+    COMMENT_EMOJI_BY_TOKEN.set(normalizedToken, emoji);
+  }
+
+  function discoverCommentEmojisFromPage() {
+    const selector = [
+      'img[src*="face.t.sinajs.cn"]',
+      'img[data-src*="face.t.sinajs.cn"]',
+      'img[data-original*="face.t.sinajs.cn"]',
+      'img[data-lazy-src*="face.t.sinajs.cn"]'
+    ].join(",");
+    for (const image of document.querySelectorAll(selector)) {
+      const token = getRichTextImageAlt(image)
+        || image.closest("[title]")?.getAttribute("title")
+        || image.closest("[aria-label]")?.getAttribute("aria-label")
+        || "";
+      registerDiscoveredCommentEmoji(token, getRichTextImageSource(image));
+    }
+  }
+
+  function getAvailableCommentEmojis() {
+    return [...COMMENT_EMOJIS, ...DISCOVERED_COMMENT_EMOJIS.values()];
+  }
+
+  function getCommentEmoji(value) {
+    const normalizedToken = normalizeCommentEmojiToken(value);
     return COMMENT_EMOJI_BY_TOKEN.get(normalizedToken) || null;
   }
 
@@ -2605,6 +2648,7 @@
         if (node.tagName === "IMG") {
           const emojiSource = getRichTextImageSource(node);
           const emojiAlt = getRichTextImageAlt(node);
+          registerDiscoveredCommentEmoji(emojiAlt, emojiSource);
           target.append(emojiSource ? createRichEmoji(emojiSource, emojiAlt) : emojiAlt);
           continue;
         }
@@ -3100,6 +3144,17 @@
     return media;
   }
 
+  function createLinkedActionOption() {
+    const label = document.createElement("label");
+    label.className = "weibo-grid-reader__linked-action-option";
+    label.hidden = true;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    const text = document.createElement("span");
+    label.append(input, text);
+    return { label, input, text };
+  }
+
   function createCardInteractions(status) {
     const statusId = getStatusId(status);
     const footer = document.createElement("div");
@@ -3117,6 +3172,7 @@
     textarea.rows = 2;
     textarea.maxLength = 140;
     const emojiPicker = createCommentEmojiPicker(textarea, { portal: true });
+    const linkedAction = createLinkedActionOption();
 
     const formFooter = document.createElement("div");
     formFooter.className = "weibo-grid-reader__card-composer-footer";
@@ -3129,7 +3185,7 @@
     const submit = document.createElement("button");
     submit.type = "submit";
     submit.className = "weibo-grid-reader__card-composer-submit";
-    formFooter.append(count, cancel, submit);
+    formFooter.append(linkedAction.label, count, cancel, submit);
     composer.append(textarea, emojiPicker, formFooter);
 
     const feedback = document.createElement("p");
@@ -3163,6 +3219,7 @@
     let composerPending = false;
     let attitudePending = false;
     const drafts = { comment: "", repost: "" };
+    const linkedActions = { comment: false, repost: false };
     const updateActionLabels = () => {
       const liked = isStatusLiked(status);
       setMetricLabel(repostButton, "转发", status.reposts_count);
@@ -3187,21 +3244,29 @@
       repostButton.disabled = composerPending;
       commentButton.disabled = composerPending;
       textarea.disabled = composerPending;
+      linkedAction.input.disabled = composerPending;
       cancel.disabled = composerPending;
       count.textContent = `${textarea.value.length}/140`;
       if (!isOpen || composerPending) {
         setCommentEmojiPickerOpen(emojiPicker, false);
       }
       if (!isOpen) {
+        linkedAction.label.hidden = true;
         return;
       }
       const isRepost = activeComposer === "repost";
+      linkedAction.label.hidden = false;
+      linkedAction.text.textContent = isRepost ? "同时评论" : "同时转发";
+      linkedAction.input.checked = linkedActions[activeComposer];
+      const isLinkedAction = linkedActions[activeComposer];
       textarea.placeholder = isRepost ? "说点什么再转发…" : "发布你的评论";
       textarea.setAttribute("aria-label", textarea.placeholder);
-      submit.disabled = composerPending || (!isRepost && !text);
+      submit.disabled = composerPending || (!text && (!isRepost || isLinkedAction));
       submit.textContent = composerPending
         ? (isRepost ? "转发中…" : "发布中…")
-        : (isRepost && !text ? "直接转发" : (isRepost ? "转发" : "评论"));
+        : isRepost
+          ? (isLinkedAction ? "转发并评论" : (text ? "转发" : "直接转发"))
+          : (isLinkedAction ? "评论并转发" : "评论");
     };
     const toggleComposer = (type) => {
       if (activeComposer === type) {
@@ -3259,6 +3324,7 @@
         return;
       }
       drafts[activeComposer] = "";
+      linkedActions[activeComposer] = false;
       textarea.value = "";
       activeComposer = "";
       updateComposer();
@@ -3270,12 +3336,20 @@
       }
       updateComposer();
     });
+    linkedAction.input.addEventListener("change", () => {
+      if (activeComposer) {
+        linkedActions[activeComposer] = linkedAction.input.checked;
+      }
+      updateComposer();
+    });
     composer.addEventListener("submit", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const text = textarea.value.trim();
       const action = activeComposer;
-      if (composerPending || !action || (action === "comment" && !text)) {
+      const alsoComment = action === "repost" && linkedActions.repost;
+      const alsoRepost = action === "comment" && linkedActions.comment;
+      if (composerPending || !action || (action === "comment" && !text) || (alsoComment && !text)) {
         return;
       }
       composerPending = true;
@@ -3283,7 +3357,7 @@
       feedback.textContent = action === "repost" ? "正在转发…" : "正在发布评论…";
       const result = await bridgeRequest(
         action === "repost" ? "create-repost" : "create-comment",
-        { statusId, text }
+        { statusId, text, alsoComment, alsoRepost }
       );
       composerPending = false;
       if (!result.ok) {
@@ -3292,16 +3366,25 @@
         return;
       }
       drafts[action] = "";
+      linkedActions[action] = false;
       textarea.value = "";
       activeComposer = "";
       if (action === "repost") {
         status.reposts_count = getNonNegativeCount(status.reposts_count) + 1;
         updateStatusMetric(status, "reposts", "转发", status.reposts_count);
-        feedback.textContent = "转发成功";
+        if (alsoComment) {
+          status.comments_count = getNonNegativeCount(status.comments_count) + 1;
+          updateStatusMetric(status, "comments", "评论", status.comments_count);
+        }
+        feedback.textContent = alsoComment ? "转发并评论成功" : "转发成功";
       } else {
         status.comments_count = getNonNegativeCount(status.comments_count) + 1;
         updateStatusMetric(status, "comments", "评论", status.comments_count);
-        feedback.textContent = "评论已发布";
+        if (alsoRepost) {
+          status.reposts_count = getNonNegativeCount(status.reposts_count) + 1;
+          updateStatusMetric(status, "reposts", "转发", status.reposts_count);
+        }
+        feedback.textContent = alsoRepost ? "评论并转发成功" : "评论已发布";
       }
       updateActionLabels();
       updateComposer();
@@ -3869,10 +3952,10 @@
     panel.className = "weibo-grid-reader__comment-emoji-panel";
     panel.hidden = true;
     panel.setAttribute("role", "group");
-    panel.setAttribute("aria-label", "微博常用表情");
+    panel.setAttribute("aria-label", "微博表情");
     const panelHeading = document.createElement("strong");
     panelHeading.className = "weibo-grid-reader__comment-emoji-heading";
-    panelHeading.textContent = "常用表情";
+    panelHeading.textContent = "热门及当前页面表情";
     const grid = document.createElement("div");
     grid.className = "weibo-grid-reader__comment-emoji-grid";
     const status = document.createElement("span");
@@ -3880,32 +3963,48 @@
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
 
-    for (const emoji of COMMENT_EMOJIS) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "weibo-grid-reader__comment-emoji-option";
-      button.setAttribute("aria-label", `[${emoji.name}]`);
-      button.title = `[${emoji.name}]`;
-      const image = document.createElement("img");
-      image.alt = "";
-      image.decoding = "async";
-      image.loading = "lazy";
-      image.referrerPolicy = "origin";
-      image.src = emoji.src;
-      image.addEventListener("error", () => {
-        button.classList.add("weibo-grid-reader__comment-emoji-option--fallback");
-        button.textContent = emoji.name;
-      }, { once: true });
-      button.append(image);
-      button.addEventListener("click", () => {
-        if (insertCommentEmoji(textarea, emoji.name)) {
-          status.textContent = `已添加[${emoji.name}]`;
-        } else {
-          status.textContent = `字数已满，无法添加[${emoji.name}]`;
-        }
-      });
-      grid.append(button);
-    }
+    const renderEmojiOptions = () => {
+      discoverCommentEmojisFromPage();
+      grid.replaceChildren();
+      const emojis = getAvailableCommentEmojis();
+      for (const emoji of emojis) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "weibo-grid-reader__comment-emoji-option";
+        button.setAttribute("aria-label", `[${emoji.name}]`);
+        button.title = `[${emoji.name}]`;
+        const image = document.createElement("img");
+        image.alt = "";
+        image.decoding = "async";
+        image.loading = "lazy";
+        image.referrerPolicy = "origin";
+        const sources = [emoji.src, ...(emoji.fallbackSources || [])];
+        let sourceIndex = 0;
+        const loadSource = () => {
+          image.src = sources[sourceIndex] || "";
+        };
+        image.addEventListener("error", () => {
+          sourceIndex += 1;
+          if (sourceIndex < sources.length) {
+            loadSource();
+            return;
+          }
+          button.classList.add("weibo-grid-reader__comment-emoji-option--fallback");
+          button.textContent = emoji.name;
+        });
+        loadSource();
+        button.append(image);
+        button.addEventListener("click", () => {
+          if (insertCommentEmoji(textarea, emoji.name)) {
+            status.textContent = `已添加[${emoji.name}]`;
+          } else {
+            status.textContent = `字数已满，无法添加[${emoji.name}]`;
+          }
+        });
+        grid.append(button);
+      }
+      status.textContent = `已收录 ${emojis.length} 个表情，页面出现的新表情会自动加入`;
+    };
 
     panel.append(panelHeading, grid, status);
     picker.__weiboGridEmojiPanel = panel;
@@ -3931,6 +4030,9 @@
         if (otherPicker !== picker) {
           setCommentEmojiPickerOpen(otherPicker, false);
         }
+      }
+      if (open) {
+        renderEmojiOptions();
       }
       setCommentEmojiPickerOpen(picker, open);
     });
@@ -4320,6 +4422,7 @@
       portal: true,
       resolvePortalHost: () => getDetailOverlay() || getExtensionRoot() || document.body
     });
+    const linkedAction = createLinkedActionOption();
     const formFooter = document.createElement("div");
     formFooter.className = "weibo-grid-reader__comment-form-footer";
     const count = document.createElement("span");
@@ -4331,13 +4434,14 @@
     const submit = document.createElement("button");
     submit.type = "submit";
     submit.className = "weibo-grid-reader__comment-submit";
-    formFooter.append(count, cancel, submit);
+    formFooter.append(linkedAction.label, count, cancel, submit);
     commentForm.append(textarea, emojiPicker, formFooter);
 
     let attitudePending = false;
     let composerPending = false;
     let activeComposer = "";
     const drafts = { comment: "", repost: "" };
+    const linkedActions = { comment: false, repost: false };
     const updateCommentHeading = () => {
       heading.textContent = `评论 ${formatCount(status.comments_count)}`;
     };
@@ -4365,6 +4469,7 @@
       repostButton.disabled = composerPending;
       commentButton.disabled = composerPending;
       textarea.disabled = composerPending;
+      linkedAction.input.disabled = composerPending;
       cancel.disabled = composerPending;
       count.textContent = `${textarea.value.length}/140`;
       if (!hasActiveComposer || composerPending) {
@@ -4372,16 +4477,23 @@
       }
 
       if (!hasActiveComposer) {
+        linkedAction.label.hidden = true;
         return;
       }
 
       const isRepost = activeComposer === "repost";
+      linkedAction.label.hidden = false;
+      linkedAction.text.textContent = isRepost ? "同时评论" : "同时转发";
+      linkedAction.input.checked = linkedActions[activeComposer];
+      const isLinkedAction = linkedActions[activeComposer];
       textarea.placeholder = isRepost ? "说点什么再转发…" : "发布你的评论";
       textarea.setAttribute("aria-label", textarea.placeholder);
-      submit.disabled = composerPending || (!isRepost && !text);
+      submit.disabled = composerPending || (!text && (!isRepost || isLinkedAction));
       submit.textContent = composerPending
         ? (isRepost ? "转发中…" : "发布中…")
-        : (isRepost && !text ? "直接转发" : (isRepost ? "转发" : "评论"));
+        : isRepost
+          ? (isLinkedAction ? "转发并评论" : (text ? "转发" : "直接转发"))
+          : (isLinkedAction ? "评论并转发" : "评论");
     };
     const toggleComposer = (type) => {
       if (activeComposer === type) {
@@ -4438,6 +4550,7 @@
         return;
       }
       drafts[activeComposer] = "";
+      linkedActions[activeComposer] = false;
       textarea.value = "";
       activeComposer = "";
       updateComposer();
@@ -4448,11 +4561,19 @@
       }
       updateComposer();
     });
+    linkedAction.input.addEventListener("change", () => {
+      if (activeComposer) {
+        linkedActions[activeComposer] = linkedAction.input.checked;
+      }
+      updateComposer();
+    });
     commentForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = textarea.value.trim();
       const action = activeComposer;
-      if (composerPending || !action || (action === "comment" && !text)) {
+      const alsoComment = action === "repost" && linkedActions.repost;
+      const alsoRepost = action === "comment" && linkedActions.comment;
+      if (composerPending || !action || (action === "comment" && !text) || (alsoComment && !text)) {
         return;
       }
 
@@ -4461,7 +4582,7 @@
       feedback.textContent = action === "repost" ? "正在转发…" : "正在发布评论…";
       const result = await bridgeRequest(
         action === "repost" ? "create-repost" : "create-comment",
-        { statusId, text }
+        { statusId, text, alsoComment, alsoRepost }
       );
       composerPending = false;
 
@@ -4472,17 +4593,28 @@
       }
 
       drafts[action] = "";
+      linkedActions[action] = false;
       textarea.value = "";
       activeComposer = "";
       if (action === "repost") {
         status.reposts_count = getNonNegativeCount(status.reposts_count) + 1;
         updateStatusMetric(status, "reposts", "转发", status.reposts_count);
-        feedback.textContent = "转发成功";
+        if (alsoComment) {
+          status.comments_count = getNonNegativeCount(status.comments_count) + 1;
+          updateCommentHeading();
+          updateStatusMetric(status, "comments", "评论", status.comments_count);
+          void loadDetailComments(status, comments, api);
+        }
+        feedback.textContent = alsoComment ? "转发并评论成功" : "转发成功";
       } else {
         status.comments_count = getNonNegativeCount(status.comments_count) + 1;
         updateCommentHeading();
         updateStatusMetric(status, "comments", "评论", status.comments_count);
-        feedback.textContent = "评论已发布";
+        if (alsoRepost) {
+          status.reposts_count = getNonNegativeCount(status.reposts_count) + 1;
+          updateStatusMetric(status, "reposts", "转发", status.reposts_count);
+        }
+        feedback.textContent = alsoRepost ? "评论并转发成功" : "评论已发布";
         void loadDetailComments(status, comments, api);
       }
       updateActionLabels();
@@ -4524,31 +4656,16 @@
     return api;
   }
 
-  function updateDetailCommentLoadControl(state) {
-    const button = state?.loadMoreButton;
-    if (!button) {
-      return;
-    }
-
-    button.hidden = !state.hasMore && !state.error;
-    button.disabled = state.loading;
-    button.textContent = state.loading
-      ? "正在加载评论…"
-      : state.error
-        ? "加载失败，点击重试"
-        : "加载更多评论";
-  }
-
   function renderDetailComments(status, comments, detailInteractions, state) {
     comments.replaceChildren();
     state.commentsAvailable = state.error ? true : state.comments.length > 0;
     state.onVisibilityChange?.();
+    state.loadMoreSentinel.hidden = !state.hasMore || state.loading || Boolean(state.error);
     if (!state.comments.length) {
       const empty = document.createElement("p");
       empty.className = "weibo-grid-reader__comment-empty";
       empty.textContent = state.error || "暂时没有可展示的评论";
       comments.append(empty);
-      updateDetailCommentLoadControl(state);
       repositionActiveDetail();
       return;
     }
@@ -4570,7 +4687,6 @@
       nestedRows.forEach(attachZonesRecursively);
     };
     commentItems.forEach(attachZonesRecursively);
-    updateDetailCommentLoadControl(state);
     repositionActiveDetail();
   }
 
@@ -4587,8 +4703,7 @@
     state.loading = true;
     state.error = "";
     comments.dataset.weiboGridLoadVersion = String(requestVersion);
-    updateDetailCommentLoadControl(state);
-
+    state.loadMoreSentinel.hidden = true;
     const result = await bridgeRequest("fetch-comments", {
       statusId,
       maxId: requestedMaxId
@@ -4605,16 +4720,14 @@
     state.loading = false;
     if (!result.ok) {
       state.error = result.reason || "请在微博原页查看";
-      state.errorOnAppend = append;
       if (!append) {
         state.comments = [];
         state.commentIds.clear();
         state.maxId = "";
         state.hasMore = false;
         renderDetailComments(status, comments, detailInteractions, state);
-      } else {
-        updateDetailCommentLoadControl(state);
       }
+      state.loadMoreSentinel.hidden = true;
       return;
     }
 
@@ -4658,7 +4771,6 @@
       && !totalReached
     );
     state.error = "";
-    state.errorOnAppend = false;
     renderDetailComments(status, comments, detailInteractions, state);
   }
 
@@ -4806,10 +4918,10 @@
     comments.append(loading);
 
     const detailInteractions = createDetailInteractions(status, heading, comments, contextKey);
-    const loadMoreButton = document.createElement("button");
-    loadMoreButton.type = "button";
-    loadMoreButton.className = "weibo-grid-reader__comment-load-more";
-    loadMoreButton.hidden = true;
+    const loadMoreSentinel = document.createElement("div");
+    loadMoreSentinel.className = "weibo-grid-reader__comment-load-sentinel";
+    loadMoreSentinel.setAttribute("aria-hidden", "true");
+    loadMoreSentinel.hidden = true;
 
     const state = {
       comments: [],
@@ -4820,22 +4932,16 @@
       hasMore: false,
       loading: false,
       error: "",
-      errorOnAppend: false,
       requestVersion: 0,
       detailSessionId,
       contextKey,
       initialized: false,
       commentsAvailable: getNonNegativeCount(status.comments_count) > 0,
       onVisibilityChange: null,
-      loadMoreButton
+      loadMoreSentinel
     };
     detailCommentStates.set(comments, state);
-
-    loadMoreButton.addEventListener("click", () => {
-      const append = state.error ? state.errorOnAppend : true;
-      void loadDetailComments(status, comments, detailInteractions, append);
-    });
-    panel.append(detailInteractions.interactions, heading, comments, loadMoreButton);
+    panel.append(detailInteractions.interactions, heading, comments, loadMoreSentinel);
 
     return { key: contextKey, label, status, panel, comments, detailInteractions, state };
   }
@@ -5050,7 +5156,7 @@
           void loadDetailComments(context.status, context.comments, context.detailInteractions, true);
         }
       }, { root: sideContent, rootMargin: "180px 0px" });
-      state.loadMoreObserver.observe(state.loadMoreButton);
+      state.loadMoreObserver.observe(state.loadMoreSentinel);
     });
     window.requestAnimationFrame(() => {
       window.scrollTo(scrollPosition.left, scrollPosition.top);
