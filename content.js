@@ -8,7 +8,7 @@
   const DETAIL_ID = "weibo-grid-reader-detail";
   const DARK_THEME_CLASS = "weibo-grid-reader-theme-dark";
   const SETTINGS_KEY = "weiboGridReaderSettings";
-  const BUTTON_ICON_PATH = "icon/32.png";
+  const BUTTON_ICON_PATH = "icon/128.png";
   const DEFAULT_SETTINGS = Object.freeze({
     readerEnabled: true,
     columnCount: 2,
@@ -5079,9 +5079,8 @@
     sideContent.className = "weibo-grid-reader__detail-side-content";
     sideContent.append(...commentContexts.map((context) => context.panel));
     const syncCommentSideVisibility = () => {
-      const hasComments = commentContexts.some((context) => context.state.commentsAvailable);
-      side.hidden = !hasComments;
-      dialog.classList.toggle("weibo-grid-reader__detail-dialog--no-comments", !hasComments);
+      side.hidden = false;
+      dialog.classList.remove("weibo-grid-reader__detail-dialog--no-comments");
       repositionActiveDetail();
     };
     commentContexts.forEach((context) => {
