@@ -5798,10 +5798,70 @@
     if (!hasValidExtensionContext() || !chrome.runtime?.onMessage) {
       return;
     }
-    chrome.runtime.onMessage.addListener((message) => {
+    const getSettingsSnapshot = () => ({
+      readerEnabled: settings.readerEnabled,
+      columnCount: settings.columnCount,
+      cardQuickActions: settings.cardQuickActions
+    });
+
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message?.type === "toggle-reader-drawer" && isFeedRoute()) {
         setDrawerOpen(!drawerOpen);
+        sendResponse({ ok: true, settings: getSettingsSnapshot() });
+        return false;
       }
+
+      if (message?.type === "get-reader-state") {
+        sendResponse({
+          ok: true,
+          available: isFeedRoute(),
+          settings: getSettingsSnapshot()
+        });
+        return false;
+      }
+
+      if (message?.type !== "update-reader-setting") {
+        return false;
+      }
+
+      if (!isFeedRoute()) {
+        sendResponse({ ok: false, reason: "当前页面不是微博信息流。" });
+        return false;
+      }
+
+      void (async () => {
+        const controls = getControls();
+        if (message.key === "readerEnabled") {
+          await setReaderEnabledWithTransition(Boolean(message.value), controls.readerToggle);
+        } else if (message.key === "columnCount") {
+          const columnCount = Number(message.value);
+          if (![2, 3, 4].includes(columnCount)) {
+            throw new Error("不支持的信息流列数。");
+          }
+          await setColumnCountWithTransition(columnCount, controls.densitySlider);
+        } else if (message.key === "cardQuickActions") {
+          setCardQuickActions(Boolean(message.value), controls.cardQuickActionsToggle);
+        } else {
+          throw new Error("无法识别这项设置。");
+        }
+
+        const nextSettings = getSettingsSnapshot();
+        const expectedValue = message.key === "columnCount"
+          ? Number(message.value)
+          : Boolean(message.value);
+        if (nextSettings[message.key] !== expectedValue) {
+          sendResponse({ ok: false, reason: "设置未能应用，已恢复原状态。", settings: nextSettings });
+          return;
+        }
+        sendResponse({ ok: true, settings: nextSettings });
+      })().catch((error) => {
+        sendResponse({
+          ok: false,
+          reason: error instanceof Error ? error.message : "设置失败。",
+          settings: getSettingsSnapshot()
+        });
+      });
+      return true;
     });
   }
 

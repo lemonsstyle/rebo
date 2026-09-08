@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>rebo 设置</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="panel" aria-labelledby="title">
+      <header class="header">
+        <img src="icon/32.png" alt="" width="32" height="32">
+        <div>
+          <h1 id="title">rebo</h1>
+          <p>微博信息流阅读</p>
+        </div>
+      </header>
+
+      <p class="status" data-status role="status" aria-live="polite">正在连接当前页面…</p>
+
+      <section class="settings" data-settings aria-label="阅读器设置" hidden>
+        <label class="setting">
+          <span>
+            <strong>使用新布局</strong>
+          </span>
+          <input type="checkbox" data-setting="readerEnabled">
+        </label>
+
+        <label class="setting setting--columns">
+          <span>
+            <strong>信息流列数</strong>
+            <small data-column-label>稀疏 · 2 列</small>
+          </span>
+          <input type="range" min="2" max="4" step="1" data-setting="columnCount" aria-label="选择信息流列数">
+        </label>
+
+        <label class="setting">
+          <span>
+            <strong>卡片快捷操作</strong>
+            <small>直接转发、评论和点赞</small>
+          </span>
+          <input type="checkbox" data-setting="cardQuickActions">
+        </label>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
