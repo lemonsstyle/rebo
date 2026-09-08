@@ -9,37 +9,45 @@
   <body>
     <main class="panel" aria-labelledby="title">
       <header class="header">
-        <img src="icon/32.png" alt="" width="32" height="32">
-        <div>
-          <h1 id="title">rebo</h1>
-          <p>微博信息流阅读</p>
-        </div>
+        <h1 id="title">rebo</h1>
       </header>
 
       <p class="status" data-status role="status" aria-live="polite">正在连接当前页面…</p>
 
       <section class="settings" data-settings aria-label="阅读器设置" hidden>
         <label class="setting">
-          <span>
+          <span class="setting-copy">
             <strong>使用新布局</strong>
           </span>
-          <input type="checkbox" data-setting="readerEnabled">
+          <span class="switch">
+            <input type="checkbox" data-setting="readerEnabled">
+            <span class="switch-track" aria-hidden="true"></span>
+          </span>
         </label>
 
-        <label class="setting setting--columns">
-          <span>
+        <div class="setting setting--columns">
+          <span class="setting-copy">
             <strong>信息流列数</strong>
-            <small data-column-label>稀疏 · 2 列</small>
           </span>
-          <input type="range" min="2" max="4" step="1" data-setting="columnCount" aria-label="选择信息流列数">
-        </label>
+          <div class="density-control">
+            <input class="density-slider" type="range" min="2" max="4" step="1" data-setting="columnCount" aria-label="选择信息流列数">
+            <div class="density-labels" aria-hidden="true">
+              <span data-density-label="2">稀疏</span>
+              <span data-density-label="3">适中</span>
+              <span data-density-label="4">紧凑</span>
+            </div>
+          </div>
+        </div>
 
         <label class="setting">
-          <span>
+          <span class="setting-copy">
             <strong>卡片快捷操作</strong>
-            <small>直接转发、评论和点赞</small>
+            <small>开启后，可直接在卡片底部转发、评论和点赞</small>
           </span>
-          <input type="checkbox" data-setting="cardQuickActions">
+          <span class="switch">
+            <input type="checkbox" data-setting="cardQuickActions">
+            <span class="switch-track" aria-hidden="true"></span>
+          </span>
         </label>
       </section>
     </main>

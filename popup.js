@@ -2,16 +2,16 @@
   "use strict";
 
   const COLUMN_LABELS = {
-    2: "稀疏 · 2 列",
-    3: "适中 · 3 列",
-    4: "紧凑 · 4 列"
+    2: "稀疏，2 列",
+    3: "适中，3 列",
+    4: "紧凑，4 列"
   };
 
   const status = document.querySelector("[data-status]");
   const settingsPanel = document.querySelector("[data-settings]");
   const readerToggle = document.querySelector('[data-setting="readerEnabled"]');
   const columnSlider = document.querySelector('[data-setting="columnCount"]');
-  const columnLabel = document.querySelector("[data-column-label]");
+  const densityLabels = [...document.querySelectorAll("[data-density-label]")];
   const quickActionsToggle = document.querySelector('[data-setting="cardQuickActions"]');
   const controls = [readerToggle, columnSlider, quickActionsToggle];
   let activeTabId = null;
@@ -31,13 +31,32 @@
   }
 
   function renderState(state) {
+    document.body.dataset.theme = state.darkTheme ? "dark" : "light";
     readerToggle.checked = Boolean(state.readerEnabled);
     columnSlider.value = String(state.columnCount);
-    columnLabel.textContent = COLUMN_LABELS[state.columnCount] || COLUMN_LABELS[2];
+    updateDensityState(state.columnCount);
     quickActionsToggle.checked = Boolean(state.cardQuickActions);
     settingsPanel.hidden = false;
     setStatus("", "ready");
     setBusy(false);
+  }
+
+  function updateDensityState(columnCount) {
+    const normalizedColumnCount = Number(columnCount);
+    columnSlider.setAttribute(
+      "aria-valuetext",
+      COLUMN_LABELS[normalizedColumnCount] || COLUMN_LABELS[2]
+    );
+    columnSlider.style.setProperty(
+      "--density-progress",
+      `${((normalizedColumnCount - 2) / 2) * 100}%`
+    );
+    densityLabels.forEach((label) => {
+      label.classList.toggle(
+        "density-label--active",
+        Number(label.dataset.densityLabel) === normalizedColumnCount
+      );
+    });
   }
 
   async function sendToPage(message) {
@@ -83,7 +102,7 @@
     void updateSetting("readerEnabled", readerToggle.checked);
   });
   columnSlider.addEventListener("input", () => {
-    columnLabel.textContent = COLUMN_LABELS[columnSlider.value] || COLUMN_LABELS[2];
+    updateDensityState(columnSlider.value);
   });
   columnSlider.addEventListener("change", () => {
     void updateSetting("columnCount", Number(columnSlider.value));

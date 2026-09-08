@@ -5801,7 +5801,8 @@
     const getSettingsSnapshot = () => ({
       readerEnabled: settings.readerEnabled,
       columnCount: settings.columnCount,
-      cardQuickActions: settings.cardQuickActions
+      cardQuickActions: settings.cardQuickActions,
+      darkTheme: document.documentElement.classList.contains(DARK_THEME_CLASS)
     });
 
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

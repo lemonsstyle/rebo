@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -8,55 +8,42 @@
 }
 
 body {
-  background: #f7f7f8;
-  color: #202124;
+  background: #fff;
+  color: #252525;
   margin: 0;
-  width: 320px;
+  width: 280px;
 }
 
 .panel {
-  padding: 18px;
+  padding: 16px;
 }
 
 .header {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.header img {
-  border-radius: 8px;
-  display: block;
-}
-
-.header h1,
-.header p,
-.status {
-  margin: 0;
+  justify-content: space-between;
+  padding: 0 2px 12px;
 }
 
 .header h1 {
-  color: #e66d00;
+  color: #ff8200;
   font-size: 18px;
   line-height: 1.2;
-}
-
-.header p {
-  color: #777980;
-  font-size: 11px;
-  margin-top: 2px;
+  margin: 0;
 }
 
 .status {
-  color: #6e7077;
+  background: #fff7ed;
+  border-radius: 14px;
+  color: #8b7564;
   font-size: 12px;
   line-height: 1.45;
-  padding: 10px 2px;
+  margin: 0;
+  padding: 11px 12px;
 }
 
 .status[data-state="error"] {
-  color: #a23b22;
+  color: #b45100;
 }
 
 .status[data-state="ready"] {
@@ -64,28 +51,32 @@ body {
 }
 
 .settings {
-  background: #fff;
-  border: 1px solid #e6e6e8;
+  background: #fff7ed;
   border-radius: 14px;
-  overflow: hidden;
+  margin: 0;
+  padding: 3px 12px;
 }
 
 .setting {
   align-items: center;
-  border-bottom: 1px solid #ededee;
+  border-bottom: 1px solid rgb(255 130 0 / 13%);
   cursor: pointer;
   display: flex;
-  gap: 14px;
+  gap: 10px;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 11px 13px;
+  padding: 10px 0;
 }
 
 .setting:last-child {
   border-bottom: 0;
 }
 
-.setting > span {
+.setting--columns {
+  align-items: flex-start;
+  cursor: default;
+}
+
+.setting-copy {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -97,59 +88,200 @@ body {
 }
 
 .setting small {
-  color: #85878d;
-  font-size: 10px;
+  color: #888;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
-.setting input[type="checkbox"] {
-  accent-color: #f47a11;
-  height: 18px;
+.switch {
+  display: block;
+  flex: 0 0 auto;
+  height: 24px;
+  position: relative;
+  width: 42px;
+}
+
+.switch input {
+  block-size: 1px;
+  inline-size: 1px;
   margin: 0;
-  width: 18px;
+  opacity: 0;
+  position: absolute;
 }
 
-.setting--columns {
-  align-items: flex-start;
-}
-
-.setting input[type="range"] {
-  accent-color: #f47a11;
+.switch-track {
+  background: #d7dadd;
+  border-radius: 999px;
   cursor: pointer;
+  inset: 1px 0;
+  position: absolute;
+  transition: background 160ms ease;
+}
+
+.switch-track::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  content: "";
+  height: 20px;
+  left: 2px;
+  position: absolute;
+  top: 1px;
+  transition: transform 160ms ease;
+  width: 20px;
+}
+
+.switch input:checked + .switch-track {
+  background: #ff8200;
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(18px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid #a84d00;
+  outline-offset: 2px;
+}
+
+.switch input:disabled + .switch-track {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.density-control {
+  display: grid;
+  flex: 0 0 138px;
+  gap: 7px;
+  width: 138px;
+}
+
+.density-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--density-progress, 0%),
+    #f1d3b3 var(--density-progress, 0%) 100%
+  );
+  border-radius: 999px;
+  cursor: pointer;
+  height: 5px;
   margin: 7px 0 0;
-  width: 112px;
+  padding: 0;
+  width: 100%;
+}
+
+.density-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 5px;
+}
+
+.density-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
+  cursor: pointer;
+  height: 17px;
+  margin-top: -6px;
+  width: 17px;
+}
+
+.density-slider::-moz-range-track {
+  background: #f1d3b3;
+  border-radius: 999px;
+  height: 5px;
+}
+
+.density-slider::-moz-range-progress {
+  background: #ff8200;
+  border-radius: 999px;
+  height: 5px;
+}
+
+.density-slider::-moz-range-thumb {
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
+  height: 11px;
+  width: 11px;
+}
+
+.density-slider:focus-visible {
+  outline: 2px solid #a84d00;
+  outline-offset: 4px;
+}
+
+.density-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.density-labels {
+  color: #9b8d82;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  line-height: 1;
+}
+
+.density-label--active {
+  color: #d96200;
+  font-weight: 700;
 }
 
 .settings[aria-busy="true"] {
   opacity: 0.62;
 }
 
-input:focus-visible {
-  outline: 2px solid #f47a11;
-  outline-offset: 3px;
+body[data-theme="dark"] {
+  background: #242529;
+  color: #e8e9eb;
+  color-scheme: dark;
 }
 
-input:disabled {
-  cursor: progress;
+body[data-theme="dark"] .status,
+body[data-theme="dark"] .settings {
+  background: #2d2925;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #1c1c1e;
-    color: #f5f5f7;
-  }
+body[data-theme="dark"] .status,
+body[data-theme="dark"] .setting small,
+body[data-theme="dark"] .density-labels {
+  color: #a5a8ad;
+}
 
-  .header p,
-  .status,
-  .setting small {
-    color: #aeaeb2;
-  }
+body[data-theme="dark"] .status[data-state="error"] {
+  color: #ffad65;
+}
 
-  .settings {
-    background: #2c2c2e;
-    border-color: #414145;
-  }
+body[data-theme="dark"] .setting {
+  border-bottom-color: rgb(255 145 56 / 18%);
+}
 
-  .setting {
-    border-bottom-color: #414145;
+body[data-theme="dark"] .switch-track {
+  background: #55585e;
+}
+
+body[data-theme="dark"] .density-slider {
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--density-progress, 0%),
+    #655345 var(--density-progress, 0%) 100%
+  );
+}
+
+body[data-theme="dark"] .density-slider::-moz-range-track {
+  background: #655345;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-track::after {
+    transition: none;
   }
 }
