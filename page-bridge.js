@@ -61,6 +61,150 @@
     };
   }
 
+  function md5Buffer(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const words = [];
+    for (let index = 0; index < bytes.length; index += 1) {
+      words[index >> 2] = (words[index >> 2] || 0) | (bytes[index] << ((index % 4) * 8));
+    }
+    const bitLength = bytes.length * 8;
+    words[bytes.length >> 2] = (words[bytes.length >> 2] || 0) | (0x80 << ((bytes.length % 4) * 8));
+    const lengthWord = ((bytes.length + 8) >> 6) + 1;
+    while (words.length < lengthWord * 16) words.push(0);
+    words[lengthWord * 16 - 2] = bitLength >>> 0;
+    words[lengthWord * 16 - 1] = Math.floor(bitLength / 0x100000000);
+
+    const rotate = (value, amount) => (value << amount) | (value >>> (32 - amount));
+    const add = (first, second) => (first + second) | 0;
+    const sine = Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000));
+    const shifts = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+    let a = 0x67452301;
+    let b = 0xefcdab89;
+    let c = 0x98badcfe;
+    let d = 0x10325476;
+    for (let block = 0; block < words.length; block += 16) {
+      let aa = a;
+      let bb = b;
+      let cc = c;
+      let dd = d;
+      for (let index = 0; index < 64; index += 1) {
+        let functionValue;
+        let wordIndex;
+        if (index < 16) {
+          functionValue = (bb & cc) | (~bb & dd);
+          wordIndex = index;
+        } else if (index < 32) {
+          functionValue = (dd & bb) | (~dd & cc);
+          wordIndex = (5 * index + 1) % 16;
+        } else if (index < 48) {
+          functionValue = bb ^ cc ^ dd;
+          wordIndex = (3 * index + 5) % 16;
+        } else {
+          functionValue = cc ^ (bb | ~dd);
+          wordIndex = (7 * index) % 16;
+        }
+        const round = Math.floor(index / 16);
+        const shift = shifts[round * 4 + (index % 4)];
+        const next = add(add(add(aa, functionValue), words[block + wordIndex] || 0), sine[index]);
+        const rotated = add(bb, rotate(next, shift));
+        aa = dd;
+        dd = cc;
+        cc = bb;
+        bb = rotated;
+      }
+      a = add(a, aa);
+      b = add(b, bb);
+      c = add(c, cc);
+      d = add(d, dd);
+    }
+    const digestWords = [a, b, c, d];
+    return digestWords.map((word) => [0, 8, 16, 24].map((shift) => ((word >>> shift) & 0xff).toString(16).padStart(2, "0")).join("")).join("");
+  }
+
+  function getCurrentUserId() {
+    const directId = String(
+      window.$CONFIG?.uid
+      || window.$CONFIG?.user?.id
+      || window.$CONFIG?.user?.idstr
+      || window.$uid
+      || window._CONFIG?.uid
+      || window._CONFIG?.user?.id
+      || window.__wbConfig?.uid
+      || window.__wbConfig?.user?.id
+      || ""
+    );
+    if (directId) {
+      return directId;
+    }
+
+    const initialState = window.__INITIAL_STATE__;
+    const candidates = [
+      initialState?.loginUser,
+      initialState?.login_user,
+      initialState?.user,
+      initialState?.account,
+      window.$CONFIG?.loginUser,
+      window.$CONFIG?.login_user
+    ];
+    for (const candidate of candidates) {
+      const id = candidate?.idstr || candidate?.id || candidate?.uid;
+      if (id) {
+        return String(id);
+      }
+    }
+    return "";
+  }
+
+  async function uploadCommentImage(file) {
+    if (!(file instanceof File) || !file.size) {
+      return { ok: false, reason: "请选择有效的图片文件。" };
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const endpoint = new URL("https://picupload.weibo.com/interface/upload.php");
+      endpoint.searchParams.set("file_source", "3");
+      endpoint.searchParams.set("cs", String(Math.floor(Math.random() * 0x7fffffff)));
+      endpoint.searchParams.set("ent", "miniblog");
+      endpoint.searchParams.set("appid", "339644097");
+      const uid = getCurrentUserId();
+      if (uid) endpoint.searchParams.set("uid", uid);
+      endpoint.searchParams.set("raw_md5", md5Buffer(buffer));
+      endpoint.searchParams.set("ori", "1");
+      endpoint.searchParams.set("mpos", "1");
+      endpoint.searchParams.set("nick", "0");
+      endpoint.searchParams.set("request_id", String(Date.now()));
+      endpoint.searchParams.set("file_size", String(file.size));
+
+      const response = await new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", endpoint.href);
+        request.setRequestHeader("Content-Type", "application/octet-stream");
+        request.addEventListener("load", () => resolve(request));
+        request.addEventListener("error", () => reject(new Error("图片上传请求失败（可能被图床 CORS 策略拦截）。")));
+        request.addEventListener("abort", () => reject(new Error("图片上传已取消。")));
+        request.send(buffer);
+      });
+      let payload = null;
+      try {
+        payload = JSON.parse(response.responseText || "{}");
+      } catch {
+        return { ok: false, reason: "图片上传返回了无法识别的响应。" };
+      }
+      const pid = payload?.pic?.pid;
+      if (response.status < 200 || response.status >= 300 || !payload?.ret || !pid) {
+        return {
+          ok: false,
+          reason: payload?.msg || payload?.message
+            || `图片上传失败（HTTP ${response.status || "未知"}，errno：${payload?.errno ?? "未知"}，uid：${uid || "缺失"}，响应字段：${Object.keys(payload || {}).join(",") || "无"}）。`
+        };
+      }
+      return { ok: true, payload: { pid: String(pid) } };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : "图片上传失败。" };
+    }
+  }
+
   async function getBotFingerprint(source) {
     try {
       const result = await window.wbBotDetector?.get?.({ useCache: false, from: source });
@@ -622,9 +766,9 @@
     }
   }
 
-  async function createComment(statusId, text, alsoRepost = false) {
+  async function createComment(statusId, text, alsoRepost = false, picId = "") {
     const comment = String(text || "").trim();
-    if (!statusId || !comment) {
+    if (!statusId || (!comment && !picId)) {
       return { ok: false, reason: "评论内容不能为空。" };
     }
 
@@ -633,6 +777,7 @@
       {
         id: String(statusId),
         comment,
+        pic_id: picId,
         is_repost: alsoRepost ? 1 : 0,
         comment_ori: 0,
         is_comment: 0
@@ -642,14 +787,11 @@
   }
 
   // 回复某一条已有评论：真实接口是独立的 /ajax/comments/reply（不是顶层评论
-  // 用的 /ajax/comments/create），已在浏览器网络面板抓包核实。字段为 id（当前
-  // 微博 id）、cid（被回复评论的 id）、comment、pic_id（图片评论用，本扩展
-  // 不支持图片评论，故不传）、is_repost=0、comment_ori=0、is_comment=0。
-  // pic_id 在抓包里是空值，postWeiboForm 本就会自动过滤掉空字符串字段，
-  // 因此这里不需要显式传 pic_id: ""，效果与真实请求一致。
-  async function createCommentReply(statusId, parentCommentId, text) {
+  // 用的 /ajax/comments/create），字段为 id、cid、comment、pic_id、is_repost=0、
+  // comment_ori=0、is_comment=0；pic_id 为空时由 postWeiboForm 自动过滤。
+  async function createCommentReply(statusId, parentCommentId, text, picId = "") {
     const comment = String(text || "").trim();
-    if (!statusId || !parentCommentId || !comment) {
+    if (!statusId || !parentCommentId || (!comment && !picId)) {
       return { ok: false, reason: "回复内容不能为空。" };
     }
 
@@ -659,6 +801,7 @@
         id: String(statusId),
         cid: String(parentCommentId),
         comment,
+        pic_id: picId,
         is_repost: 0,
         comment_ori: 0,
         is_comment: 0
@@ -739,6 +882,11 @@
       return;
     }
 
+    const bridgeSessionId = message.bridgeSessionId;
+    if (!bridgeSessionId) {
+      return;
+    }
+
     const requiresUserActivation = [
       "create-comment",
       "create-comment-reply",
@@ -749,12 +897,10 @@
       "cancel-comment-like"
     ].includes(message.type);
     if (requiresUserActivation && navigator.userActivation && !navigator.userActivation.isActive) {
-      respond(message.requestId, { ok: false, reason: "请在详情卡片中手动发起此操作。" });
-      return;
-    }
-
-    const bridgeSessionId = message.bridgeSessionId;
-    if (!bridgeSessionId) {
+      respond(message.requestId, bridgeSessionId, {
+        ok: false,
+        reason: "请在详情卡片中手动发起此操作。"
+      });
       return;
     }
 
@@ -777,7 +923,7 @@
     }
 
     if (message.type === "create-comment") {
-      void createComment(message.statusId, message.text, message.alsoRepost).then((result) => {
+      void createComment(message.statusId, message.text, message.alsoRepost, message.picId).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }
@@ -801,7 +947,13 @@
     }
 
     if (message.type === "create-comment-reply") {
-      void createCommentReply(message.statusId, message.parentCommentId, message.text).then((result) => {
+      void createCommentReply(message.statusId, message.parentCommentId, message.text, message.picId).then((result) => {
+        respond(message.requestId, bridgeSessionId, result);
+      });
+    }
+
+    if (message.type === "upload-comment-image") {
+      void uploadCommentImage(message.file).then((result) => {
         respond(message.requestId, bridgeSessionId, result);
       });
     }

@@ -20,7 +20,10 @@
       "128": "icon/128.png"
     }
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "host_permissions": ["https://weibo.com/*", "https://www.weibo.com/*"],
   "content_scripts": [
     {

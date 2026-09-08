@@ -270,6 +270,10 @@ cardWidth = (gridWidth - gap × (columns - 1)) / columns
 
 需要单独注意图床图片：正文和评论的图片资源可能来自 `t.cn` 与 `*.sinaimg.cn`，浏览器会像正常网页图片一样向这些微博图床请求资源；为了处理防盗链，当前预览显式发送完整微博页面 Referer。该行为不传送 Cookie 内容，但 Referer 可能包含当前分组 URL 中的 `gid`。如果该隐私取舍不可接受，应把图片预览的 `referrerPolicy` 改回更严格策略，并接受部分图床图片预览失败的可能性。
 
+### 评论图片上传
+
+评论编辑器支持单张图片：文件选择后立即上传到 `picupload.weibo.com/interface/upload.php`，读取响应中的 `pic.pid`，再将其作为 `pic_id` 传给 `/ajax/comments/create` 或 `/ajax/comments/reply`。详情评论、卡片快捷评论和楼中楼回复均支持图片；图片上传失败时保留文字评论能力，支持发送前移除或替换图片，也允许纯图片评论。上传参数和图床接口均为微博网页端非公开接口，未来改版时应通过网络面板重新核实。
+
 ## 12. 已知限制与维护策略
 
 1. 微博未承诺上述 AJAX 接口或字段稳定；接口改版时，应优先在浏览器网络面板确认真实请求和响应，再调整 `page-bridge.js` 与提取函数。评论回复（`POST /ajax/comments/reply`）、评论点赞（`POST /ajax/statuses/updateLike`）与评论取消点赞（`POST /ajax/statuses/destroyLike`）均已通过真实抓包核实请求路径和字段（见第 9.1 节）。评论响应里表示点赞状态/数量的具体字段名仍未核实，缺失时按未点赞处理。
