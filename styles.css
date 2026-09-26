@@ -1,0 +1,3513 @@
+#weibo-grid-reader-root {
+  color: #252525;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  position: fixed;
+  bottom: 22px;
+  left: 22px;
+  right: auto;
+  top: auto;
+  z-index: 2147483000;
+}
+
+#weibo-grid-reader-root[hidden],
+#weibo-grid-reader-surface[hidden] {
+  display: none !important;
+}
+
+#weibo-grid-reader-root.weibo-grid-reader--transitioning .weibo-grid-reader__drawer,
+#weibo-grid-reader-root.weibo-grid-reader--transitioning .weibo-grid-reader__button {
+  transition-duration: 320ms;
+}
+
+.weibo-grid-reader__button {
+  align-items: center;
+  background: #ff7c37;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgb(29 29 29 / 22%);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  font-size: 24px;
+  height: 46px;
+  justify-content: center;
+  padding: 0;
+  transform: none;
+  transition: background 160ms ease, transform 160ms ease;
+  width: 46px;
+}
+
+.weibo-grid-reader__button:hover {
+  background: #ff7c37;
+  transform: scale(1.04);
+}
+
+.weibo-grid-reader__button-icon {
+  display: block;
+  height: 32px;
+  object-fit: contain;
+  width: 32px;
+}
+
+.weibo-grid-reader__drawer {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgb(30 30 30 / 18%);
+  box-sizing: border-box;
+  height: auto;
+  max-width: calc(100vw - 96px);
+  overflow: hidden;
+  padding: 16px;
+  position: fixed;
+  bottom: 22px;
+  left: 78px;
+  right: auto;
+  top: auto;
+  transform: translateX(-120%);
+  transition: transform 220ms ease;
+  visibility: hidden;
+  width: 280px;
+}
+
+.weibo-grid-reader--open .weibo-grid-reader__drawer {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.weibo-grid-reader--open .weibo-grid-reader__button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px 12px;
+}
+
+.weibo-grid-reader__title-brand {
+  color: #ff8200;
+}
+
+.weibo-grid-reader__header h2 {
+  font-size: 18px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.weibo-grid-reader__close {
+  background: #f5f6f7;
+  border: 0;
+  border-radius: 50%;
+  color: #555;
+  cursor: pointer;
+  font-size: 20px;
+  height: 28px;
+  line-height: 1;
+  padding: 0 0 3px;
+  width: 28px;
+}
+
+.weibo-grid-reader__settings {
+  background: #fff7ed;
+  border-radius: 14px;
+  margin: 0;
+  padding: 3px 12px;
+}
+
+.weibo-grid-reader__setting {
+  align-items: center;
+  border-bottom: 1px solid rgb(255 130 0 / 13%);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.weibo-grid-reader__setting:last-of-type {
+  border-bottom: 0;
+}
+
+.weibo-grid-reader__column-setting {
+  align-items: flex-start;
+}
+
+.weibo-grid-reader__setting-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__setting strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.weibo-grid-reader__setting small {
+  color: #888;
+  font-size: 11px;
+}
+
+.weibo-grid-reader__switch {
+  display: block;
+  flex: 0 0 auto;
+  height: 24px;
+  position: relative;
+  width: 42px;
+}
+
+.weibo-grid-reader__switch input {
+  block-size: 1px;
+  inline-size: 1px;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.weibo-grid-reader__switch-track {
+  background: #d7dadd;
+  border-radius: 999px;
+  cursor: pointer;
+  inset: 1px 0;
+  position: absolute;
+  transition: background 160ms ease;
+}
+
+.weibo-grid-reader__switch-track::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  content: "";
+  height: 20px;
+  left: 2px;
+  position: absolute;
+  top: 1px;
+  transition: transform 160ms ease;
+  width: 20px;
+}
+
+.weibo-grid-reader__switch input:checked + .weibo-grid-reader__switch-track {
+  background: #ff8200;
+}
+
+.weibo-grid-reader__switch input:checked + .weibo-grid-reader__switch-track::after {
+  transform: translateX(18px);
+}
+
+.weibo-grid-reader__switch input:focus-visible + .weibo-grid-reader__switch-track {
+  outline: 2px solid #a84d00;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__switch input:disabled + .weibo-grid-reader__switch-track {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.weibo-grid-reader__density-control {
+  display: grid;
+  flex: 0 0 138px;
+  gap: 7px;
+  width: 138px;
+}
+
+.weibo-grid-reader__density-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--weibo-grid-reader-density-progress, 0%),
+    #f1d3b3 var(--weibo-grid-reader-density-progress, 0%) 100%
+  );
+  border-radius: 999px;
+  cursor: pointer;
+  height: 5px;
+  margin: 7px 0 0;
+  padding: 0;
+  width: 100%;
+}
+
+.weibo-grid-reader__density-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 5px;
+}
+
+.weibo-grid-reader__density-slider::-webkit-slider-thumb {
+  appearance: none;
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
+  cursor: pointer;
+  height: 17px;
+  margin-top: -6px;
+  width: 17px;
+}
+
+.weibo-grid-reader__density-slider::-moz-range-track {
+  background: #f1d3b3;
+  border-radius: 999px;
+  height: 5px;
+}
+
+.weibo-grid-reader__density-slider::-moz-range-progress {
+  background: #ff8200;
+  border-radius: 999px;
+  height: 5px;
+}
+
+.weibo-grid-reader__density-slider::-moz-range-thumb {
+  background: #fff;
+  border: 3px solid #ff8200;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(150 67 0 / 25%);
+  height: 11px;
+  width: 11px;
+}
+
+.weibo-grid-reader__density-slider:focus-visible {
+  outline: 2px solid #a84d00;
+  outline-offset: 4px;
+}
+
+.weibo-grid-reader__density-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.weibo-grid-reader__density-labels {
+  color: #9b8d82;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  line-height: 1;
+}
+
+.weibo-grid-reader__density-label--active {
+  color: #d96200;
+  font-weight: 700;
+}
+
+html.weibo-grid-reader-active .wbpro-side {
+  display: none !important;
+}
+
+html.weibo-grid-reader-active .weibo-grid-reader-page-layout {
+  box-sizing: border-box !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  max-width: none !important;
+  width: calc(100vw - 40px) !important;
+}
+
+html.weibo-grid-reader-active .weibo-grid-reader-feed-shell {
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+  width: calc(100vw - 260px) !important;
+}
+
+html.weibo-grid-reader-active .weibo-grid-reader-composer-panel {
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: none !important;
+  width: calc(100vw - 260px) !important;
+}
+
+html.weibo-grid-reader-active .weibo-grid-reader-navigation-panel {
+  z-index: 2;
+}
+
+html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transitioning .wbpro-side {
+  transform-origin: 50% 50%;
+  will-change: filter, opacity, transform;
+}
+
+html.weibo-grid-reader-layout-transition-out .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transition-out .wbpro-side {
+  animation: weibo-grid-reader-layout-dim-out 320ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+html.weibo-grid-reader-layout-transition-in .weibo-grid-reader-feed-shell,
+html.weibo-grid-reader-layout-transition-in .wbpro-side {
+  animation: weibo-grid-reader-layout-dim-in 440ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes weibo-grid-reader-layout-dim-out {
+  from {
+    filter: brightness(1) saturate(1);
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    filter: brightness(.84) saturate(.96);
+    opacity: .96;
+    transform: translate3d(0, 1px, 0) scale(.988);
+  }
+}
+
+@keyframes weibo-grid-reader-layout-dim-in {
+  from {
+    filter: brightness(.84) saturate(.96);
+    opacity: .96;
+    transform: translate3d(0, 1px, 0) scale(.988);
+  }
+
+  to {
+    filter: brightness(1) saturate(1);
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.vue-recycle-scroller.weibo-grid-reader-source-hidden {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.weibo-grid-reader-layout-transitioning .weibo-grid-reader-feed-shell,
+  html.weibo-grid-reader-layout-transitioning .wbpro-side {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+html.weibo-grid-reader-active .weibo-grid-reader-utility-hidden,
+html.weibo-grid-reader-active footer {
+  display: none !important;
+}
+
+#weibo-grid-reader-surface {
+  box-sizing: border-box;
+  padding-top: 12px;
+  width: calc(100vw - 260px) !important;
+}
+
+.weibo-grid-reader__grid {
+  background: #e9edf0;
+  border-radius: 18px;
+  display: block;
+  gap: 16px;
+  overflow-anchor: none;
+  position: relative;
+}
+
+.weibo-grid-reader__card {
+  align-self: start;
+  background: #fff;
+  border: 1px solid #fff;
+  border-bottom: 4px solid transparent;
+  border-radius: 14px;
+  box-shadow: 0 0 0 5px #eef1f3, 0 2px 10px rgb(28 28 28 / 7%);
+  box-sizing: border-box;
+  color: #252525;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px;
+  background-clip: padding-box;
+  text-decoration: none;
+  transform: translate3d(
+    var(--weibo-grid-reader-card-x, 0px),
+    var(--weibo-grid-reader-card-y, 0px),
+    0
+  );
+  transition: box-shadow 150ms ease;
+}
+
+.weibo-grid-reader__card:hover {
+  box-shadow: 0 0 0 5px #e2e7ea, 0 12px 28px rgb(28 28 28 / 14%);
+  transform: translate3d(
+    var(--weibo-grid-reader-card-x, 0px),
+    calc(var(--weibo-grid-reader-card-y, 0px) - 2px),
+    0
+  );
+}
+
+html.weibo-grid-reader-detail-open {
+  overscroll-behavior: none;
+}
+
+html.weibo-grid-reader-image-preview-open {
+  overscroll-behavior: none;
+}
+
+.weibo-grid-reader__detail-overlay {
+  background: rgb(17 20 24 / 17%);
+  display: block;
+  inset: 0;
+  padding: 0;
+  position: fixed;
+  z-index: 2147483002;
+}
+
+.weibo-grid-reader__detail-dialog {
+  --weibo-grid-detail-height: 620px;
+  --weibo-grid-detail-image-height: 440px;
+  --weibo-grid-detail-media-height: 280px;
+  --weibo-grid-detail-media-width: 420px;
+  --weibo-grid-detail-side-width: 280px;
+  --weibo-grid-detail-text-compact-height: 420px;
+  --weibo-grid-detail-text-compact-width: 580px;
+  --weibo-grid-detail-text-medium-height: 500px;
+  --weibo-grid-detail-text-medium-width: 680px;
+  --weibo-grid-detail-text-short-height: 360px;
+  --weibo-grid-detail-text-short-width: 500px;
+  --weibo-grid-detail-width: 840px;
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 16px;
+  box-shadow: 0 16px 44px rgb(0 0 0 / 20%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--weibo-grid-detail-side-width);
+  height: min(var(--weibo-grid-detail-height), calc(100vh - 28px));
+  overflow: hidden;
+  position: fixed;
+  width: min(var(--weibo-grid-detail-width), calc(100vw - 28px));
+}
+
+.weibo-grid-reader__detail-dialog[data-weibo-grid-density-columns="2"] {
+  --weibo-grid-detail-height: 700px;
+  --weibo-grid-detail-image-height: 500px;
+  --weibo-grid-detail-media-height: 320px;
+  --weibo-grid-detail-media-width: 480px;
+  --weibo-grid-detail-side-width: 300px;
+  --weibo-grid-detail-text-compact-height: 470px;
+  --weibo-grid-detail-text-compact-width: 650px;
+  --weibo-grid-detail-text-medium-height: 560px;
+  --weibo-grid-detail-text-medium-width: 760px;
+  --weibo-grid-detail-text-short-height: 400px;
+  --weibo-grid-detail-text-short-width: 560px;
+  --weibo-grid-detail-width: 960px;
+}
+
+.weibo-grid-reader__detail-dialog[data-weibo-grid-density-columns="4"] {
+  --weibo-grid-detail-height: 560px;
+  --weibo-grid-detail-image-height: 390px;
+  --weibo-grid-detail-media-height: 250px;
+  --weibo-grid-detail-media-width: 380px;
+  --weibo-grid-detail-side-width: 260px;
+  --weibo-grid-detail-text-compact-height: 390px;
+  --weibo-grid-detail-text-compact-width: 540px;
+  --weibo-grid-detail-text-medium-height: 460px;
+  --weibo-grid-detail-text-medium-width: 630px;
+  --weibo-grid-detail-text-short-height: 330px;
+  --weibo-grid-detail-text-short-width: 460px;
+  --weibo-grid-detail-width: 760px;
+}
+
+.weibo-grid-reader__detail-dialog--text-only {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: fit-content(45%) minmax(0, 1fr);
+}
+
+.weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="short"] {
+  height: min(var(--weibo-grid-detail-text-short-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-short-width), calc(100vw - 28px));
+}
+
+.weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="compact"] {
+  height: min(var(--weibo-grid-detail-text-compact-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-compact-width), calc(100vw - 28px));
+}
+
+.weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size="medium"] {
+  height: min(var(--weibo-grid-detail-text-medium-height), calc(100vh - 28px));
+  width: min(var(--weibo-grid-detail-text-medium-width), calc(100vw - 28px));
+}
+
+.weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side {
+  border-left: 0;
+  border-top: 1px solid #f2e7d9;
+}
+
+.weibo-grid-reader__detail-side[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__detail-dialog--image-focus {
+  height: min(var(--weibo-grid-detail-height), calc(100vh - 28px));
+}
+
+.weibo-grid-reader__detail-main {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px;
+}
+
+.weibo-grid-reader__detail-main,
+.weibo-grid-reader__detail-side-content {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.weibo-grid-reader__detail-main:hover,
+.weibo-grid-reader__detail-side-content:hover {
+  scrollbar-color: rgb(141 129 118 / 58%) transparent;
+}
+
+.weibo-grid-reader__detail-main::-webkit-scrollbar,
+.weibo-grid-reader__detail-side-content::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.weibo-grid-reader__detail-main::-webkit-scrollbar-thumb,
+.weibo-grid-reader__detail-side-content::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.weibo-grid-reader__detail-main:hover::-webkit-scrollbar-thumb,
+.weibo-grid-reader__detail-side-content:hover::-webkit-scrollbar-thumb {
+  background: rgb(141 129 118 / 58%);
+}
+
+.weibo-grid-reader__detail-main--image-focus {
+  display: block;
+  overflow-y: auto;
+}
+
+.weibo-grid-reader__detail-main--image-focus .weibo-grid-reader__detail-text {
+  max-height: none;
+  overflow: visible;
+}
+
+.weibo-grid-reader__detail-post,
+.weibo-grid-reader__detail-repost {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__detail-repost {
+  background: #f5f6f7;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.weibo-grid-reader__detail-repost-author {
+  color: #252525;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.weibo-grid-reader__detail-repost-author[href]:hover,
+.weibo-grid-reader__detail-repost-author[href]:focus-visible {
+  color: #eb6f00;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__detail-author {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__detail-author-avatar-link {
+  border-radius: 50%;
+  flex: none;
+  height: 40px;
+  width: 40px;
+}
+
+.weibo-grid-reader__detail-author-avatar {
+  background: #f2f2f2;
+  border-radius: 50%;
+  display: block;
+  height: 40px;
+  object-fit: cover;
+  width: 40px;
+}
+
+.weibo-grid-reader__detail-author-name {
+  color: #252525;
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__detail-author-name[href]:hover,
+.weibo-grid-reader__detail-author-name[href]:focus-visible {
+  color: #eb6f00;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__detail-text {
+  color: #303030;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.weibo-grid-reader__rich-link {
+  color: #eb6f00;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.weibo-grid-reader__rich-link:hover {
+  color: #c75b00;
+}
+
+.weibo-grid-reader__detail-image-viewer {
+  align-items: center;
+  align-self: start;
+  background: #f3f4f5;
+  border-radius: 12px;
+  cursor: zoom-in;
+  display: flex;
+  height: min(var(--weibo-grid-detail-image-height), calc(100vh - 180px));
+  justify-content: center;
+  max-width: 100%;
+  min-height: 260px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  width: 100%;
+}
+
+.weibo-grid-reader__detail-image-viewer[data-image-zone="previous"],
+.weibo-grid-reader__detail-image-viewer[data-image-zone="previous"] .weibo-grid-reader__detail-full-image {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 12l7-7v5h11v4H10v5z' fill='%23252525' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, w-resize;
+}
+
+.weibo-grid-reader__detail-image-viewer[data-image-zone="next"],
+.weibo-grid-reader__detail-image-viewer[data-image-zone="next"] .weibo-grid-reader__detail-full-image {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M21 12l-7-7v5H3v4h11v5z' fill='%23252525' stroke='white' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, e-resize;
+}
+
+.weibo-grid-reader__detail-full-image {
+  cursor: zoom-in;
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.weibo-grid-reader__detail-thumbnail-rail {
+  align-items: center;
+  background: #fafafa;
+  border: 1px solid #eceef0;
+  border-radius: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  padding: 8px;
+  scrollbar-width: none;
+  width: 100%;
+}
+
+.weibo-grid-reader__detail-thumbnail-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.weibo-grid-reader__detail-thumbnail {
+  background: #e9eaec;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 50px;
+  overflow: hidden;
+  padding: 0;
+  width: 50px;
+}
+
+.weibo-grid-reader__detail-thumbnail:hover,
+.weibo-grid-reader__detail-thumbnail--active {
+  border-color: #ff8200;
+}
+
+.weibo-grid-reader__detail-thumbnail img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.weibo-grid-reader__detail-main .weibo-grid-reader__image-wrap,
+.weibo-grid-reader__detail-main .weibo-grid-reader__video-wrap {
+  align-self: start;
+  margin-top: 0;
+  max-height: var(--weibo-grid-detail-media-height);
+  max-width: var(--weibo-grid-detail-media-width);
+  width: min(100%, var(--weibo-grid-detail-media-width));
+}
+
+.weibo-grid-reader__status-media-stack,
+.weibo-grid-reader__detail-media-stack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__detail-media-stack {
+  align-self: start;
+}
+
+.weibo-grid-reader__article-media {
+  align-items: stretch;
+  align-self: center;
+  background: #f5f6f7;
+  border: 1px solid #e9ebed;
+  border-radius: 10px;
+  color: #303030;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  max-width: 360px;
+  min-height: 88px;
+  overflow: hidden;
+  text-decoration: none;
+  width: 100%;
+}
+
+.weibo-grid-reader__article-media:has(.weibo-grid-reader__article-content:first-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.weibo-grid-reader__article-cover {
+  background: #e5e7e9;
+  height: 88px;
+  object-fit: cover;
+  width: 88px;
+}
+
+.weibo-grid-reader__article-content {
+  align-content: center;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 10px 10px 0;
+}
+
+.weibo-grid-reader__article-content span {
+  color: #ff8200;
+  font-size: 11px;
+}
+
+.weibo-grid-reader__article-content strong {
+  display: -webkit-box;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.weibo-grid-reader__article-content p {
+  color: #777;
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.weibo-grid-reader__detail-main .weibo-grid-reader__article-media {
+  align-self: start;
+  max-width: 420px;
+}
+
+.weibo-grid-reader__comments {
+  display: grid;
+  gap: 12px;
+}
+
+.weibo-grid-reader__comments h2 {
+  color: #333;
+  font-size: 14px;
+  margin: 0;
+}
+
+.weibo-grid-reader__detail-interactions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__detail-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weibo-grid-reader__detail-action,
+.weibo-grid-reader__detail-like,
+.weibo-grid-reader__comment-submit,
+.weibo-grid-reader__detail-composer-cancel {
+  background: #fff;
+  border: 1px solid #e6c5a4;
+  border-radius: 999px;
+  color: #b45100;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 0;
+  padding: 7px 11px;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.weibo-grid-reader__detail-action {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding-inline: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__detail-action-icon {
+  display: block;
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.weibo-grid-reader__detail-like--active .weibo-grid-reader__detail-action-icon--like path {
+  fill: currentColor;
+}
+
+.weibo-grid-reader__detail-action:hover:not(:disabled),
+.weibo-grid-reader__detail-like:hover,
+.weibo-grid-reader__comment-submit:hover:not(:disabled),
+.weibo-grid-reader__detail-composer-cancel:hover:not(:disabled) {
+  background: #fff1e2;
+  border-color: #df7b20;
+  color: #9e4200;
+}
+
+.weibo-grid-reader__detail-action--active {
+  background: #fff1e2;
+  border-color: #df7b20;
+  color: #9e4200;
+}
+
+.weibo-grid-reader__detail-like--active {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+}
+
+.weibo-grid-reader__detail-like--active:hover {
+  background: #da6300;
+  border-color: #da6300;
+  color: #fff;
+}
+
+.weibo-grid-reader__detail-like--pending,
+.weibo-grid-reader__detail-action:disabled,
+.weibo-grid-reader__detail-like:disabled,
+.weibo-grid-reader__comment-submit:disabled,
+.weibo-grid-reader__detail-composer-cancel:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__detail-action:focus-visible,
+.weibo-grid-reader__detail-like:focus-visible,
+.weibo-grid-reader__comment-input:focus-visible,
+.weibo-grid-reader__comment-emoji-trigger:focus-visible,
+.weibo-grid-reader__comment-emoji-option:focus-visible,
+.weibo-grid-reader__comment-submit:focus-visible,
+.weibo-grid-reader__detail-composer-cancel:focus-visible {
+  outline: 2px solid #ef851f;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__detail-action-feedback {
+  color: #907a66;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__comment-form {
+  background: #fff;
+  border: 1px solid #ead7c4;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+}
+
+.weibo-grid-reader__comment-form[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__comment-input {
+  background: transparent;
+  border: 0;
+  color: #303030;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 52px;
+  outline: 0;
+  padding: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.weibo-grid-reader__comment-input::placeholder {
+  color: #ad9f92;
+}
+
+.weibo-grid-reader__comment-input:disabled {
+  color: #8f8379;
+  cursor: progress;
+}
+
+.weibo-grid-reader__comment-emoji-picker {
+  min-width: 0;
+  width: fit-content;
+}
+
+.weibo-grid-reader__comment-emoji-trigger {
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: #8d6b4f;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 4px;
+  line-height: 1;
+  list-style: none;
+  padding: 4px 5px;
+  user-select: none;
+}
+
+.weibo-grid-reader__comment-emoji-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.weibo-grid-reader__comment-emoji-trigger span:first-child {
+  color: #e66d00;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 0.8;
+}
+
+.weibo-grid-reader__comment-emoji-trigger:hover,
+.weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger {
+  background: #fff1e2;
+  color: #9e4200;
+}
+
+.weibo-grid-reader__comment-emoji-trigger:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.weibo-grid-reader__comment-image-picker {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__comment-image-trigger {
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: #8d6b4f;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 4px;
+  line-height: 1;
+  padding: 4px 5px;
+}
+
+.weibo-grid-reader__comment-image-trigger:hover:not(:disabled) {
+  background: #fff1e2;
+  color: #9e4200;
+}
+
+.weibo-grid-reader__comment-image-trigger:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.weibo-grid-reader__comment-image-trigger-icon {
+  color: #e66d00;
+  font-size: 17px;
+  line-height: 0.8;
+}
+
+.weibo-grid-reader__comment-image-preview-box {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.weibo-grid-reader__comment-image-preview-box[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__comment-image-preview-thumb {
+  border: 1px solid #e4c5a5;
+  border-radius: 5px;
+  display: block;
+  height: 38px;
+  object-fit: cover;
+  width: 38px;
+}
+
+.weibo-grid-reader__comment-image-remove {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e4c5a5;
+  border-radius: 50%;
+  color: #9e4200;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 20px;
+}
+
+.weibo-grid-reader__comment-image-remove:hover:not(:disabled) {
+  background: #fff1e2;
+}
+
+.weibo-grid-reader__comment-image-remove:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.weibo-grid-reader__comment-image-status {
+  color: #9f8b78;
+  font-size: 10px;
+  max-width: 180px;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__comment-input:disabled + .weibo-grid-reader__comment-emoji-picker,
+.weibo-grid-reader__comment-inline-reply-input:disabled + .weibo-grid-reader__comment-emoji-picker {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__comment-emoji-panel {
+  background: #fff;
+  border: 1px solid #ead7c4;
+  border-radius: 9px;
+  box-shadow: 0 8px 20px rgb(80 52 30 / 12%);
+  box-sizing: border-box;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  position: fixed;
+  width: min(248px, calc(100vw - 24px));
+  z-index: 20;
+}
+
+.weibo-grid-reader__comment-emoji-panel[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__comment-emoji-heading {
+  color: #765a43;
+  font-size: 11px;
+}
+
+.weibo-grid-reader__comment-emoji-grid {
+  display: grid;
+  gap: 3px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  max-height: 178px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-color: rgb(173 145 119 / 55%) transparent;
+  scrollbar-width: thin;
+}
+
+.weibo-grid-reader__comment-emoji-option {
+  align-items: center;
+  aspect-ratio: 1;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #765a43;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 9px;
+  justify-content: center;
+  min-width: 0;
+  padding: 3px;
+}
+
+.weibo-grid-reader__comment-emoji-option:hover {
+  background: #fff1e2;
+}
+
+.weibo-grid-reader__comment-emoji-option img {
+  display: block;
+  height: 24px;
+  object-fit: contain;
+  width: 24px;
+}
+
+.weibo-grid-reader__comment-emoji-option--fallback {
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__comment-emoji-status {
+  color: #9f8b78;
+  font-size: 10px;
+  min-height: 1.2em;
+}
+
+.weibo-grid-reader__comment-form-meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__comment-form-meta .weibo-grid-reader__comment-emoji-picker {
+  flex: 0 0 auto;
+}
+
+.weibo-grid-reader__comment-form-meta .weibo-grid-reader__comment-form-count {
+  margin-left: auto;
+}
+
+.weibo-grid-reader__comment-form-footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.weibo-grid-reader__linked-action-option {
+  align-items: center;
+  color: #806b59;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__linked-action-option[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__linked-action-option input {
+  accent-color: #f47a11;
+  height: 14px;
+  margin: 0;
+  width: 14px;
+}
+
+.weibo-grid-reader__linked-action-option:has(input:disabled) {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__comment-form-count {
+  color: #a39384;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__comment-submit {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__comment-submit:disabled {
+  background: #d8c9bc;
+  border-color: #d8c9bc;
+  color: #fff;
+}
+
+.weibo-grid-reader__detail-composer-cancel {
+  border-color: transparent;
+  color: #8f7865;
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__comment-list {
+  display: grid;
+  gap: 0;
+}
+
+.weibo-grid-reader__comment-load-sentinel {
+  height: 1px;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__comment-load-sentinel[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__comment {
+  border-bottom: 1px solid #eee5dc;
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.weibo-grid-reader__comment:first-child {
+  padding-top: 0;
+}
+
+.weibo-grid-reader__comment:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.weibo-grid-reader__comment-avatar {
+  background: #f2f2f2;
+  border-radius: 50%;
+  height: 32px;
+  object-fit: cover;
+  width: 32px;
+}
+
+.weibo-grid-reader__comment-content {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__comment-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 24px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__comment-name {
+  color: #b45100;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.weibo-grid-reader__comment-name[href]:hover {
+  color: #e17412;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__comment-header .weibo-grid-reader__comment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__comment .weibo-grid-reader__comment-header .weibo-grid-reader__comment-author-badge {
+  background: #fff2e5;
+  border: 1px solid #f0c79f;
+  border-radius: 999px;
+  color: #b45100;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 3px 6px;
+}
+
+.weibo-grid-reader__comment-profile {
+  align-self: start;
+  display: block;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.weibo-grid-reader__comment p {
+  color: #303030;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__comment-replies {
+  display: grid;
+  gap: 0;
+  margin-top: 5px;
+}
+
+.weibo-grid-reader__comment-replies > .weibo-grid-reader__comment:last-of-type {
+  padding-bottom: 0;
+}
+
+.weibo-grid-reader__comment-more-replies {
+  align-items: center;
+  background: #fff8f1;
+  border: 1px solid #f0d5bd;
+  border-radius: 999px;
+  display: block;
+  margin: 7px auto 3px;
+  justify-self: center;
+  padding: 3px 9px;
+  color: #a4552f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+  width: fit-content;
+}
+
+.weibo-grid-reader__comment-more-replies:hover:not(:disabled) {
+  background: #fff0e3;
+  border-color: #dfb38f;
+  color: #8d3f20;
+}
+
+.weibo-grid-reader__comment-more-replies:focus-visible {
+  outline: 2px solid rgb(180 81 0 / 35%);
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__comment-more-replies:disabled {
+  background: #faf4ee;
+  border-color: #eadfd6;
+  cursor: wait;
+  opacity: .65;
+}
+
+.weibo-grid-reader__comment--reply {
+  border-bottom: 0;
+  padding: 3px 0 !important;
+}
+
+.weibo-grid-reader__comment--reply .weibo-grid-reader__comment-header {
+  min-height: 18px;
+}
+
+.weibo-grid-reader__comment--reply .weibo-grid-reader__comment-content {
+  gap: 0;
+}
+
+.weibo-grid-reader__comment--reply .weibo-grid-reader__comment-avatar {
+  height: 24px;
+  width: 24px;
+}
+
+.weibo-grid-reader__comment--reply .weibo-grid-reader__comment p {
+  line-height: 1.4;
+}
+
+.weibo-grid-reader__comment-zone-bar {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin-left: auto;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__comment-zone {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #7c6754;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  height: 24px;
+  justify-content: center;
+  margin: 0;
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  position: relative;
+  transition: background-color 0.15s ease-out, opacity 0.15s ease-out;
+  width: 24px;
+}
+
+/* 三个图标由同一个 --revealed 修饰类统一控制、一起淡入淡出，而不是像旧版那样
+   逐个 zone 各自计时、只亮起其中一个——用户悬停这条评论行的任意位置，就能同
+   时看到全部三个可用操作，不用先猜功能藏在哪一列。悬停到具体某个按钮上时的
+   高亮反馈交给原生 :hover，不需要额外的 JS 状态。 */
+.weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone,
+.weibo-grid-reader__comment-zone-bar:focus-within .weibo-grid-reader__comment-zone {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.weibo-grid-reader__comment-zone-icon {
+  height: 15px;
+  pointer-events: none;
+  width: 15px;
+}
+
+/* 已点赞状态只在图标簇显现时才通过颜色/填充区分，图标本身在未悬停时仍保持
+   隐藏——用户要求的交互是“悬停后才亮起图标”，不在评论行上常驻点赞状态标记。 */
+.weibo-grid-reader__comment-zone--liked {
+  color: #f47a11;
+}
+
+.weibo-grid-reader__comment-zone--liked .weibo-grid-reader__comment-zone-icon--like path {
+  fill: currentColor;
+}
+
+.weibo-grid-reader__comment-inline-reply-form {
+  background: #fbf7f2;
+  border: 1px solid #ead7c4;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 10px;
+  padding: 8px;
+}
+
+.weibo-grid-reader__comment-inline-reply-input {
+  background: transparent;
+  border: 0;
+  color: #303030;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  min-height: 40px;
+  outline: 0;
+  padding: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.weibo-grid-reader__comment-inline-reply-input::placeholder {
+  color: #ad9f92;
+}
+
+.weibo-grid-reader__comment-inline-reply-input:disabled {
+  color: #8f8379;
+  cursor: progress;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.weibo-grid-reader__comment-inline-reply-feedback {
+  color: #907a66;
+  font-size: 11px;
+  margin-right: auto;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__comment-inline-reply-count {
+  color: #a39384;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer button {
+  background: #fff;
+  border: 1px solid #e6c5a4;
+  border-radius: 999px;
+  color: #b45100;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer button:hover:not(:disabled) {
+  background: #fff1e2;
+  border-color: #df7b20;
+  color: #9e4200;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer button:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+}
+
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:disabled {
+  background: #d8c9bc;
+  border-color: #d8c9bc;
+  color: #fff;
+}
+
+
+.weibo-grid-reader__comment-image-preview {
+  display: block;
+  margin-top: 8px;
+}
+
+.weibo-grid-reader__comment-image-thumbnail {
+  background: #eceef0;
+  border: 0;
+  border-radius: 8px;
+  cursor: zoom-in;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+}
+
+.weibo-grid-reader__comment-image-thumbnail img {
+  display: block;
+  max-height: 168px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.weibo-grid-reader__comment-image-preview--failed {
+  color: #999;
+  font-size: 12px;
+}
+
+.weibo-grid-reader__comment-image-preview-layer {
+  background: rgb(9 11 14 / 88%);
+  box-sizing: border-box;
+  inset: 0;
+  overflow: hidden;
+  position: fixed;
+  z-index: 5;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone,
+.weibo-grid-reader__comment-image-preview-layer--compact {
+  align-items: center;
+  background: rgb(17 20 24 / 38%);
+  display: grid;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  z-index: 2147483003;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-viewport,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-viewport {
+  background: #101216;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 34%);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: min(580px, calc(100vh - 96px));
+  inset: auto;
+  padding: 12px;
+  position: relative;
+  width: min(720px, calc(100vw - 48px));
+}
+
+.weibo-grid-reader__image-preview-viewport {
+  inset: max(28px, env(safe-area-inset-top)) max(40px, env(safe-area-inset-right)) 88px max(40px, env(safe-area-inset-left));
+  overflow: hidden;
+  position: absolute;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--gallery .weibo-grid-reader__image-preview-viewport {
+  bottom: 158px;
+}
+
+.weibo-grid-reader__image-preview-stage {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-stage,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-stage {
+  border-radius: 12px;
+  height: auto;
+  min-height: 0;
+}
+
+.weibo-grid-reader__comment-image-preview-full {
+  cursor: zoom-in;
+  display: block;
+  flex: 0 0 auto;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  opacity: 0;
+  touch-action: none;
+  transform-origin: center;
+  transition: opacity 120ms ease, transform 120ms ease;
+  user-select: none;
+  will-change: transform;
+}
+
+.weibo-grid-reader__comment-image-preview-layer[data-image-zone="previous"] .weibo-grid-reader__comment-image-preview-full {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 12l7-7v5h11v4H10v5z' fill='%23ffffff' stroke='%23252525' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, w-resize;
+}
+
+.weibo-grid-reader__comment-image-preview-layer[data-image-zone="next"] .weibo-grid-reader__comment-image-preview-full {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M21 12l-7-7v5H3v4h11v5z' fill='%23ffffff' stroke='%23252525' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, e-resize;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--loaded .weibo-grid-reader__comment-image-preview-full {
+  opacity: 1;
+}
+
+.weibo-grid-reader__image-preview-loading {
+  align-items: center;
+  color: rgb(255 255 255 / 72%);
+  display: grid;
+  font-size: 14px;
+  inset: 0;
+  margin: 0;
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--zoomed .weibo-grid-reader__comment-image-preview-full {
+  cursor: grab;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--dragging .weibo-grid-reader__comment-image-preview-full {
+  cursor: grabbing;
+  transition: none;
+}
+
+.weibo-grid-reader__comment-image-preview-close {
+  align-items: center;
+  background: rgb(30 33 38 / 78%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  font-size: 26px;
+  height: 40px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 0 2px;
+  position: absolute;
+  right: max(20px, env(safe-area-inset-right));
+  top: max(20px, env(safe-area-inset-top));
+  transition: background 120ms ease, transform 120ms ease;
+  width: 40px;
+  z-index: 1;
+}
+
+.weibo-grid-reader__comment-image-preview-close:hover,
+.weibo-grid-reader__comment-image-preview-close:focus-visible {
+  background: rgb(63 67 74 / 94%);
+  transform: scale(1.04);
+}
+
+.weibo-grid-reader__image-preview-toolbar {
+  align-items: center;
+  background: rgb(28 31 36 / 86%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+  display: flex;
+  gap: 4px;
+  left: 50%;
+  padding: 6px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.weibo-grid-reader__comment-image-preview-layer--standalone .weibo-grid-reader__image-preview-toolbar,
+.weibo-grid-reader__comment-image-preview-layer--compact .weibo-grid-reader__image-preview-toolbar {
+  bottom: auto;
+  justify-self: center;
+  left: auto;
+  margin-top: 12px;
+  position: static;
+  transform: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnails {
+  align-items: center;
+  background: rgb(28 31 36 / 86%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 14px;
+  bottom: max(76px, calc(env(safe-area-inset-bottom) + 76px));
+  box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+  display: flex;
+  gap: 8px;
+  left: 50%;
+  max-width: min(620px, calc(100vw - 80px));
+  padding: 7px 9px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.weibo-grid-reader__image-preview-thumbnails[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__image-preview-counter {
+  color: rgb(255 255 255 / 78%);
+  flex: 0 0 auto;
+  font-size: 12px;
+  min-width: 38px;
+  text-align: center;
+}
+
+.weibo-grid-reader__image-preview-thumbnail-list {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnail-list::-webkit-scrollbar {
+  display: none;
+}
+
+.weibo-grid-reader__image-preview-thumbnail {
+  background: #202329;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 46px;
+  overflow: hidden;
+  padding: 0;
+  width: 46px;
+}
+
+.weibo-grid-reader__image-preview-thumbnail:hover,
+.weibo-grid-reader__image-preview-thumbnail:focus-visible,
+.weibo-grid-reader__image-preview-thumbnail--active {
+  border-color: #ff9f0a;
+}
+
+.weibo-grid-reader__image-preview-thumbnail img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.weibo-grid-reader__image-preview-control {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  height: 34px;
+  justify-content: center;
+  min-width: 38px;
+  padding: 0 12px;
+}
+
+.weibo-grid-reader__image-preview-control:first-child,
+.weibo-grid-reader__image-preview-control:nth-child(3) {
+  font-size: 22px;
+  padding: 0;
+}
+
+.weibo-grid-reader__image-preview-control:hover:not(:disabled),
+.weibo-grid-reader__image-preview-control:focus-visible {
+  background: rgb(255 255 255 / 14%);
+}
+
+.weibo-grid-reader__image-preview-control:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.weibo-grid-reader__image-preview-error {
+  color: rgb(255 255 255 / 82%);
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 0;
+  text-align: center;
+}
+
+.weibo-grid-reader__image-preview-error a {
+  color: #ffd0a3;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.weibo-grid-reader__image-preview-error a:hover,
+.weibo-grid-reader__image-preview-error a:focus-visible {
+  color: #fff;
+}
+
+.weibo-grid-reader__comment span,
+.weibo-grid-reader__comment-empty {
+  color: #999;
+  font-size: 12px;
+  margin: 0;
+}
+
+.weibo-grid-reader__detail-side {
+  background: #fffaf5;
+  border-left: 1px solid #f2e7d9;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.weibo-grid-reader__detail-side-content {
+  background: #fffaf5;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.weibo-grid-reader__card-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__avatar {
+  background: #f2f2f2;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 38px;
+  object-fit: cover;
+  width: 38px;
+}
+
+.weibo-grid-reader__identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.weibo-grid-reader__identity strong,
+.weibo-grid-reader__identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__identity strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.weibo-grid-reader__identity span {
+  color: #939393;
+  font-size: 11px;
+}
+
+.weibo-grid-reader__text {
+  color: #303030;
+  display: -webkit-box;
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.weibo-grid-reader__text--expanded,
+.weibo-grid-reader__repost-text--expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.weibo-grid-reader__long-text-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: #e66d00;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.weibo-grid-reader__long-text-toggle:hover {
+  color: #b95500;
+  text-decoration: underline;
+}
+
+.weibo-grid-reader__long-text-toggle:disabled {
+  color: #a99e95;
+  cursor: progress;
+  text-decoration: none;
+}
+
+.weibo-grid-reader__emoji {
+  display: inline-block;
+  height: 1.18em;
+  margin: 0 0.06em;
+  object-fit: contain;
+  vertical-align: -0.22em;
+  width: auto;
+}
+
+.weibo-grid-reader__repost {
+  background: #f6f7f8;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.weibo-grid-reader__repost-author {
+  color: #5d5d5d;
+  font-size: 13px;
+}
+
+.weibo-grid-reader__repost-text {
+  color: #4b4b4b;
+  display: -webkit-box;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.weibo-grid-reader__image-wrap {
+  align-self: center;
+  background: #f3f4f5;
+  border-radius: 10px;
+  max-height: 240px;
+  max-width: 360px;
+  margin-top: auto;
+  overflow: hidden;
+  width: 100%;
+}
+
+.weibo-grid-reader__image-wrap--single {
+  align-items: center;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  justify-content: center;
+}
+
+.weibo-grid-reader__image-wrap--multi {
+  aspect-ratio: 1 / 1;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.weibo-grid-reader__image-wrap--two-portrait,
+.weibo-grid-reader__image-wrap--two-mixed {
+  aspect-ratio: 4 / 3;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.weibo-grid-reader__image-wrap--two-landscape {
+  aspect-ratio: 4 / 3;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.weibo-grid-reader__image-wrap--three-first-portrait,
+.weibo-grid-reader__image-wrap--three-first-landscape,
+.weibo-grid-reader__image-wrap--four {
+  aspect-ratio: 1 / 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.weibo-grid-reader__image-wrap--three-first-portrait .weibo-grid-reader__image-cell:first-child {
+  grid-row: 1 / span 2;
+}
+
+.weibo-grid-reader__image-wrap--three-first-landscape .weibo-grid-reader__image-cell:first-child {
+  grid-column: 1 / span 2;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi {
+  align-self: stretch;
+  aspect-ratio: 4 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  max-height: none;
+  max-width: none;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi[data-count="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:first-child {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+#weibo-grid-reader-surface[data-columns="2"] .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image {
+  object-fit: contain;
+  object-position: center;
+  transform: none;
+}
+
+.weibo-grid-reader__image-cell {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.weibo-grid-reader__image {
+  display: block;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  object-fit: contain;
+  transition: transform 200ms ease;
+  width: 100%;
+}
+
+.weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image {
+  background: #e8e9ea;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.025);
+  transform-origin: center;
+  width: 100%;
+}
+
+.weibo-grid-reader__image-more {
+  align-items: center;
+  background: rgb(0 0 0 / 52%);
+  color: #fff;
+  display: flex;
+  font-size: 24px;
+  font-weight: 700;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+}
+
+.weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:nth-child(1) .weibo-grid-reader__image {
+  object-position: center top;
+  transform: scale(1.03);
+}
+
+.weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:nth-child(2) .weibo-grid-reader__image {
+  object-position: center center;
+  transform: scale(1.045);
+}
+
+.weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:nth-child(3) .weibo-grid-reader__image {
+  object-position: center bottom;
+  transform: scale(1.03);
+}
+
+.weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image-cell:nth-child(4) .weibo-grid-reader__image {
+  object-position: center bottom;
+  transform: scale(1.04);
+}
+
+.weibo-grid-reader__image-wrap--multi[data-count="2"] .weibo-grid-reader__image-cell:nth-child(2) .weibo-grid-reader__image {
+  object-position: center bottom;
+}
+
+.weibo-grid-reader__repost .weibo-grid-reader__image-wrap {
+  margin-top: 2px;
+}
+
+.weibo-grid-reader__video-wrap {
+  align-self: center;
+  aspect-ratio: 16 / 9;
+  background: #171717;
+  border-radius: 10px;
+  max-height: 240px;
+  max-width: 360px;
+  margin-top: auto;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.weibo-grid-reader__video {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.weibo-grid-reader__video-quality {
+  background: rgb(17 17 17 / 78%);
+  border: 1px solid rgb(255 255 255 / 32%);
+  border-radius: 999px;
+  color: #fff;
+  color-scheme: dark;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: calc(100% - 20px);
+  padding: 5px 8px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 2;
+}
+
+.weibo-grid-reader__video-quality:hover {
+  background: rgb(17 17 17 / 90%);
+}
+
+.weibo-grid-reader__video-quality:focus-visible {
+  outline: 2px solid #f59a45;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__repost .weibo-grid-reader__video-wrap {
+  margin-top: 2px;
+}
+
+.weibo-grid-reader__video-fallback {
+  align-items: center;
+  color: #eee;
+  display: flex;
+  font-size: 13px;
+  height: 100%;
+  justify-content: center;
+  padding: 0 18px;
+  text-align: center;
+}
+
+.weibo-grid-reader__metrics {
+  color: #929292;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.weibo-grid-reader__card-actions {
+  gap: 4px;
+}
+
+.weibo-grid-reader__card-action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 0;
+  font: inherit;
+  gap: 5px;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 0;
+  padding: 4px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.weibo-grid-reader__card-action-icon {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.weibo-grid-reader__card-action-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__card-action:hover:not(:disabled),
+.weibo-grid-reader__card-action--active {
+  background: #fff1e2;
+  color: #b45100;
+}
+
+.weibo-grid-reader__card-action--liked {
+  color: #e56200;
+}
+
+.weibo-grid-reader__card-action--liked .weibo-grid-reader__card-action-icon--like path {
+  fill: currentColor;
+}
+
+.weibo-grid-reader__card-action--pending,
+.weibo-grid-reader__card-action:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__card-action:focus-visible,
+.weibo-grid-reader__card-composer-input:focus-visible,
+.weibo-grid-reader__card-composer-cancel:focus-visible,
+.weibo-grid-reader__card-composer-submit:focus-visible {
+  outline: 2px solid #ef851f;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__card-composer {
+  background: #fff8f1;
+  border: 1px solid #ead7c4;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+}
+
+.weibo-grid-reader__card-composer[hidden] {
+  display: none;
+}
+
+.weibo-grid-reader__card-composer-input {
+  background: transparent;
+  border: 0;
+  color: #333;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 42px;
+  outline: 0;
+  padding: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.weibo-grid-reader__card-composer-input::placeholder {
+  color: #a89b90;
+}
+
+.weibo-grid-reader__card-composer-input:disabled {
+  cursor: progress;
+}
+
+.weibo-grid-reader__card-composer-input:disabled + .weibo-grid-reader__comment-emoji-picker {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.weibo-grid-reader__card-composer-footer {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.weibo-grid-reader__card-composer-count {
+  color: #9a8a7c;
+  font-size: 11px;
+  margin-right: auto;
+}
+
+.weibo-grid-reader__card-composer-cancel,
+.weibo-grid-reader__card-composer-submit {
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 11px;
+}
+
+.weibo-grid-reader__card-composer-cancel {
+  background: #fff;
+  border: 1px solid #e6c5a4;
+  color: #b45100;
+}
+
+.weibo-grid-reader__card-composer-submit {
+  background: #f47a11;
+  border: 1px solid #f47a11;
+  color: #fff;
+}
+
+.weibo-grid-reader__card-composer-cancel:hover:not(:disabled) {
+  background: #fff1e2;
+}
+
+.weibo-grid-reader__card-composer-submit:hover:not(:disabled) {
+  background: #da6300;
+  border-color: #da6300;
+}
+
+.weibo-grid-reader__card-composer-cancel:disabled,
+.weibo-grid-reader__card-composer-submit:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.weibo-grid-reader__card-action-feedback {
+  color: #907a66;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: -4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.weibo-grid-reader__card-action-feedback:empty {
+  display: none;
+}
+
+.weibo-grid-reader__sentinel {
+  height: 2px;
+}
+
+.weibo-grid-reader__load-status {
+  align-items: center;
+  color: #8d7f74;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: center;
+  margin: 0;
+  min-height: 42px;
+  padding: 6px 0 16px;
+  text-align: center;
+}
+
+.weibo-grid-reader__load-status[data-state="loading"]::before,
+.weibo-grid-reader__load-status[data-state="retrying"]::before {
+  animation: weibo-grid-reader-loading-spin 720ms linear infinite;
+  border: 2px solid #f2c9a6;
+  border-radius: 50%;
+  border-top-color: #eb7919;
+  content: "";
+  height: 13px;
+  width: 13px;
+}
+
+.weibo-grid-reader__load-status[data-state="error"] {
+  color: #b45100;
+}
+
+html.weibo-grid-reader-theme-dark #weibo-grid-reader-root {
+  color: #e8e9eb;
+  color-scheme: dark;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__drawer {
+  background: #242529;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 38%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__close {
+  background: #34363b;
+  color: #d7d9dd;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__settings {
+  background: #2d2925;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__setting {
+  border-bottom-color: rgb(255 145 56 / 18%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__setting small,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-labels {
+  color: #a5a8ad;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__switch-track {
+  background: #55585e;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-slider {
+  background: linear-gradient(
+    90deg,
+    #ff8200 0 var(--weibo-grid-reader-density-progress, 0%),
+    #655345 var(--weibo-grid-reader-density-progress, 0%) 100%
+  );
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__density-slider::-moz-range-track {
+  background: #655345;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__grid {
+  background: #18191c;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card {
+  background: #242529;
+  border-color: #303238;
+  box-shadow: 0 0 0 5px #1b1c1f, 0 2px 12px rgb(0 0 0 / 24%);
+  color: #e8e9eb;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card:hover {
+  box-shadow: 0 0 0 5px #303238, 0 12px 30px rgb(0 0 0 / 38%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-overlay {
+  background: rgb(0 0 0 / 48%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog {
+  background: #242529;
+  border-color: #383a40;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 48%);
+  color: #e8e9eb;
+  color-scheme: dark;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side {
+  border-color: #3a342f;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-media {
+  background: #303136;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-media {
+  border-color: #41434a;
+  color: #e1e3e6;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comments h2,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment p,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-input {
+  color: #e1e3e6;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-trigger,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-remove {
+  background: #292a2f;
+  border-color: #76543a;
+  color: #e7a36e;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-trigger:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-remove:hover:not(:disabled) {
+  background: #493426;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-preview-thumb {
+  border-color: #76543a;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-text {
+  color: #c8cbd0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-author-name {
+  color: #e1e3e6;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-author-avatar {
+  background: #35373d;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__identity span,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__metrics,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-count,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-content p,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment span,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-empty,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-preview--failed {
+  color: #9da1a8;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-image-viewer,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__image-wrap,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-image-thumbnail,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__article-cover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__avatar,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-avatar {
+  background: #35373d;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__image-wrap--multi .weibo-grid-reader__image {
+  background: #303238;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail-rail {
+  background: #202125;
+  border-color: #383a40;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button {
+  background: #2b2c31;
+  border-color: #76543a;
+  color: #ffad65;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option:hover {
+  background: #493426;
+  border-color: #b4692d;
+  color: #ffc18b;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit:disabled,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit:disabled,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:disabled {
+  background: #62574f;
+  border-color: #62574f;
+  color: #d2ccc7;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-form {
+  background: #292a2f;
+  border-color: #504238;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-panel {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 32%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-input::placeholder,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form-count,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-count,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-status,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action-feedback,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action-feedback,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-feedback {
+  color: #9f9a96;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-trigger,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-heading,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-emoji-option,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone {
+  color: #b8aaa0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__linked-action-option {
+  color: #c7bbb2;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment {
+  border-color: #403a35;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment .weibo-grid-reader__comment-header .weibo-grid-reader__comment-author-badge {
+  background: #3b3028;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side-content {
+  background: #211f1e;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__load-status {
+  color: #aaa4a0;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__load-status[data-state="error"] {
+  color: #ffad65;
+}
+
+/* Content-first visual system: quiet surfaces, precise hierarchy, and feedback that
+   explains an action without competing with the post itself. */
+#weibo-grid-reader-surface {
+  padding-top: 16px;
+}
+
+.weibo-grid-reader__grid {
+  background: #f5f5f7;
+  border-radius: 22px;
+}
+
+.weibo-grid-reader__card {
+  background: rgb(255 255 255 / 94%);
+  border: 1px solid rgb(60 60 67 / 10%);
+  border-bottom-width: 1px;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 8px 24px rgb(0 0 0 / 6%);
+  gap: 14px;
+  padding: 18px;
+  transition: box-shadow 220ms cubic-bezier(.2, .75, .25, 1), border-color 220ms ease;
+}
+
+.weibo-grid-reader__card:hover {
+  border-color: rgb(60 60 67 / 18%);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 5%), 0 16px 34px rgb(0 0 0 / 10%);
+}
+
+.weibo-grid-reader__card:focus-visible {
+  outline: 3px solid rgb(0 122 255 / 38%);
+  outline-offset: 3px;
+}
+
+.weibo-grid-reader__avatar {
+  background: #f2f2f7;
+  height: 40px;
+  width: 40px;
+}
+
+.weibo-grid-reader__identity {
+  gap: 4px;
+}
+
+.weibo-grid-reader__identity strong {
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.weibo-grid-reader__identity span,
+.weibo-grid-reader__metrics {
+  color: #86868b;
+}
+
+.weibo-grid-reader__text {
+  color: #1d1d1f;
+  font-size: 14px;
+  line-height: 1.68;
+}
+
+.weibo-grid-reader__long-text-toggle,
+.weibo-grid-reader__rich-link {
+  color: #007aff;
+}
+
+.weibo-grid-reader__long-text-toggle:hover,
+.weibo-grid-reader__rich-link:hover {
+  color: #005ecb;
+}
+
+.weibo-grid-reader__repost,
+.weibo-grid-reader__detail-repost {
+  background: #f5f5f7;
+  border: 1px solid rgb(60 60 67 / 8%);
+  border-radius: 14px;
+  gap: 9px;
+  padding: 13px;
+}
+
+.weibo-grid-reader__repost-author,
+.weibo-grid-reader__detail-repost-author {
+  color: #3a3a3c;
+}
+
+.weibo-grid-reader__repost-text {
+  color: #48484a;
+  line-height: 1.62;
+}
+
+.weibo-grid-reader__image-wrap,
+.weibo-grid-reader__video-wrap,
+.weibo-grid-reader__detail-image-viewer {
+  background: #f2f2f7;
+  border-radius: 14px;
+}
+
+.weibo-grid-reader__image {
+  transition: transform 280ms cubic-bezier(.2, .75, .25, 1);
+}
+
+.weibo-grid-reader__card:hover .weibo-grid-reader__image-wrap--single .weibo-grid-reader__image {
+  transform: scale(1.015);
+}
+
+.weibo-grid-reader__metrics {
+  font-size: 12px;
+  letter-spacing: 0.005em;
+}
+
+.weibo-grid-reader__card-actions {
+  background: #f7f7f9;
+  border-radius: 11px;
+  gap: 2px;
+  padding: 2px;
+}
+
+.weibo-grid-reader__card-action {
+  border-radius: 9px;
+  color: #6e6e73;
+  min-height: 34px;
+  transition: background-color 160ms ease, color 160ms ease, transform 110ms ease;
+}
+
+.weibo-grid-reader__card-action:hover:not(:disabled),
+.weibo-grid-reader__card-action--active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 7%);
+  color: #007aff;
+}
+
+.weibo-grid-reader__card-action--liked {
+  color: #ff375f;
+}
+
+.weibo-grid-reader__card-action:active:not(:disabled) {
+  transform: scale(.96);
+}
+
+.weibo-grid-reader__card-action:focus-visible,
+.weibo-grid-reader__card-composer-input:focus-visible,
+.weibo-grid-reader__card-composer-cancel:focus-visible,
+.weibo-grid-reader__card-composer-submit:focus-visible {
+  outline-color: #007aff;
+}
+
+.weibo-grid-reader__card-composer,
+.weibo-grid-reader__comment-form,
+.weibo-grid-reader__comment-inline-reply-form {
+  background: #f7f7f9;
+  border-color: rgb(60 60 67 / 13%);
+  border-radius: 12px;
+}
+
+.weibo-grid-reader__card-composer-input,
+.weibo-grid-reader__comment-input,
+.weibo-grid-reader__comment-inline-reply-input {
+  color: #1d1d1f;
+}
+
+.weibo-grid-reader__card-composer-input::placeholder,
+.weibo-grid-reader__comment-input::placeholder,
+.weibo-grid-reader__comment-inline-reply-input::placeholder {
+  color: #98989d;
+}
+
+.weibo-grid-reader__card-composer-cancel,
+.weibo-grid-reader__detail-composer-cancel,
+.weibo-grid-reader__comment-inline-reply-footer button {
+  background: #fff;
+  border-color: rgb(60 60 67 / 16%);
+  color: #007aff;
+}
+
+.weibo-grid-reader__card-composer-submit,
+.weibo-grid-reader__comment-submit,
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #007aff;
+  border-color: #007aff;
+}
+
+.weibo-grid-reader__card-composer-submit:hover:not(:disabled),
+.weibo-grid-reader__comment-submit:hover:not(:disabled),
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:hover:not(:disabled) {
+  background: #0066d6;
+  border-color: #0066d6;
+}
+
+.weibo-grid-reader__card-action-feedback,
+.weibo-grid-reader__detail-action-feedback,
+.weibo-grid-reader__comment-inline-reply-feedback {
+  color: #6e6e73;
+}
+
+.weibo-grid-reader__detail-overlay {
+  animation: weibo-grid-reader-overlay-in 220ms ease-out both;
+  background: rgb(23 23 25 / 28%);
+  backdrop-filter: blur(10px) saturate(120%);
+}
+
+.weibo-grid-reader__detail-dialog {
+  animation: weibo-grid-reader-detail-in 360ms cubic-bezier(.2, .8, .2, 1) both;
+  background: rgb(255 255 255 / 96%);
+  border-color: rgb(60 60 67 / 12%);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 18%), 0 2px 8px rgb(0 0 0 / 7%);
+}
+
+.weibo-grid-reader__detail-main {
+  gap: 18px;
+  padding: 26px;
+}
+
+.weibo-grid-reader__detail-post,
+.weibo-grid-reader__detail-repost {
+  gap: 14px;
+}
+
+.weibo-grid-reader__detail-text {
+  color: #1d1d1f;
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+.weibo-grid-reader__detail-side,
+.weibo-grid-reader__detail-side-content {
+  background: #fffaf5;
+}
+
+.weibo-grid-reader__detail-side {
+  border-left-color: #f2e7d9;
+}
+
+.weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side {
+  border-top-color: #f2e7d9;
+}
+
+.weibo-grid-reader__detail-actions {
+  gap: 8px;
+}
+
+.weibo-grid-reader__detail-action,
+.weibo-grid-reader__detail-like {
+  background: #f2f2f7;
+  border-color: transparent;
+  border-radius: 10px;
+  color: #007aff;
+  min-height: 38px;
+  padding: 8px 10px;
+  transition: background-color 160ms ease, color 160ms ease, transform 110ms ease;
+}
+
+.weibo-grid-reader__detail-action:hover:not(:disabled),
+.weibo-grid-reader__detail-like:hover,
+.weibo-grid-reader__detail-action--active {
+  background: #e5f1ff;
+  border-color: transparent;
+  color: #0066d6;
+}
+
+.weibo-grid-reader__detail-action:active:not(:disabled),
+.weibo-grid-reader__detail-like:active:not(:disabled) {
+  transform: scale(.97);
+}
+
+.weibo-grid-reader__detail-like--active,
+.weibo-grid-reader__detail-like--active:hover {
+  background: #ff375f;
+  border-color: #ff375f;
+  color: #fff;
+}
+
+.weibo-grid-reader__detail-action:focus-visible,
+.weibo-grid-reader__detail-like:focus-visible,
+.weibo-grid-reader__comment-input:focus-visible,
+.weibo-grid-reader__comment-emoji-trigger:focus-visible,
+.weibo-grid-reader__comment-emoji-option:focus-visible,
+.weibo-grid-reader__comment-submit:focus-visible,
+.weibo-grid-reader__detail-composer-cancel:focus-visible {
+  outline-color: #007aff;
+}
+
+.weibo-grid-reader__comments {
+  gap: 14px;
+}
+
+.weibo-grid-reader__comments h2 {
+  color: #1d1d1f;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.weibo-grid-reader__comment {
+  border-bottom-color: rgb(60 60 67 / 12%);
+  gap: 11px;
+  padding: 14px 0;
+}
+
+.weibo-grid-reader__comment-avatar {
+  background: #f2f2f7;
+}
+
+.weibo-grid-reader__comment-name {
+  color: #007aff;
+}
+
+.weibo-grid-reader__comment-name[href]:hover {
+  color: #005ecb;
+}
+
+.weibo-grid-reader__comment .weibo-grid-reader__comment-header .weibo-grid-reader__comment-author-badge {
+  background: #e5f1ff;
+  border-color: transparent;
+  color: #0066d6;
+}
+
+.weibo-grid-reader__comment p {
+  color: #3a3a3c;
+  line-height: 1.58;
+}
+
+.weibo-grid-reader__comment-zone {
+  color: #86868b;
+}
+
+.weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: #ebebf0;
+  color: #007aff;
+}
+
+.weibo-grid-reader__comment-zone--liked {
+  color: #ff375f;
+}
+
+.weibo-grid-reader__comment-emoji-trigger {
+  color: #007aff;
+}
+
+.weibo-grid-reader__comment-emoji-trigger span:first-child {
+  color: #007aff;
+}
+
+.weibo-grid-reader__comment-emoji-trigger:hover,
+.weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
+.weibo-grid-reader__comment-emoji-option:hover {
+  background: #e5f1ff;
+  color: #0066d6;
+}
+
+.weibo-grid-reader__comment-emoji-panel {
+  background: rgb(255 255 255 / 98%);
+  border-color: rgb(60 60 67 / 16%);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 16%);
+}
+
+.weibo-grid-reader__comment-emoji-heading,
+.weibo-grid-reader__comment-emoji-option {
+  color: #3a3a3c;
+}
+
+.weibo-grid-reader__detail-thumbnail-rail {
+  background: #f7f7f9;
+  border-color: rgb(60 60 67 / 12%);
+  border-radius: 12px;
+}
+
+.weibo-grid-reader__detail-thumbnail:hover,
+.weibo-grid-reader__detail-thumbnail--active {
+  border-color: #007aff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__grid {
+  background: #141416;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card {
+  background: rgb(28 28 30 / 96%);
+  border-color: rgb(255 255 255 / 10%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%), 0 10px 28px rgb(0 0 0 / 24%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card:hover {
+  border-color: rgb(255 255 255 / 18%);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 28%), 0 18px 38px rgb(0 0 0 / 36%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__identity strong,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comments h2,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-input,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-input {
+  color: #f5f5f7;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-actions,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-form,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-form,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail-rail {
+  background: #2c2c2e;
+  border-color: rgb(255 255 255 / 10%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__repost-text,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-repost-author,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment p {
+  color: #e5e5ea;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__image-wrap,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__video-wrap,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-image-viewer,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-thumbnail,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-avatar {
+  background: #3a3a3c;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--active {
+  background: #3a3a3c;
+  color: #0a84ff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--liked,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone--liked {
+  color: #ff453a;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-overlay {
+  background: rgb(0 0 0 / 58%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog {
+  background: rgb(28 28 30 / 97%);
+  border-color: rgb(255 255 255 / 12%);
+  box-shadow: 0 28px 72px rgb(0 0 0 / 50%);
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side-content {
+  background: #2b2927;
+  border-color: #4a3b30;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button {
+  background: #3a3a3c;
+  border-color: transparent;
+  color: #0a84ff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: #48484a;
+  color: #0a84ff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active:hover {
+  background: #ff453a;
+  border-color: #ff453a;
+  color: #fff;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #0a84ff;
+  border-color: #0a84ff;
+}
+
+/* The reader keeps its established warm orange identity.  Neutral surfaces stay
+   quiet so this color is reserved for links, direct actions, and clear feedback. */
+.weibo-grid-reader__long-text-toggle,
+.weibo-grid-reader__rich-link,
+.weibo-grid-reader__card-action:hover:not(:disabled),
+.weibo-grid-reader__card-action--active,
+.weibo-grid-reader__card-composer-cancel,
+.weibo-grid-reader__detail-composer-cancel,
+.weibo-grid-reader__comment-inline-reply-footer button,
+.weibo-grid-reader__detail-action,
+.weibo-grid-reader__detail-like,
+.weibo-grid-reader__comment-name,
+.weibo-grid-reader__comment-emoji-trigger,
+.weibo-grid-reader__comment-emoji-trigger span:first-child {
+  color: #e66d00;
+}
+
+.weibo-grid-reader__long-text-toggle:hover,
+.weibo-grid-reader__rich-link:hover,
+.weibo-grid-reader__comment-name[href]:hover {
+  color: #c75b00;
+}
+
+.weibo-grid-reader__card-action--liked,
+.weibo-grid-reader__comment-zone--liked {
+  color: #f47a11;
+}
+
+.weibo-grid-reader__card-action:focus-visible,
+.weibo-grid-reader__card-composer-input:focus-visible,
+.weibo-grid-reader__card-composer-cancel:focus-visible,
+.weibo-grid-reader__card-composer-submit:focus-visible,
+.weibo-grid-reader__detail-action:focus-visible,
+.weibo-grid-reader__detail-like:focus-visible,
+.weibo-grid-reader__comment-input:focus-visible,
+.weibo-grid-reader__comment-emoji-trigger:focus-visible,
+.weibo-grid-reader__comment-emoji-option:focus-visible,
+.weibo-grid-reader__comment-submit:focus-visible,
+.weibo-grid-reader__detail-composer-cancel:focus-visible {
+  outline-color: #ff8200;
+}
+
+.weibo-grid-reader__card-composer-submit,
+.weibo-grid-reader__comment-submit,
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #f47a11;
+  border-color: #f47a11;
+}
+
+.weibo-grid-reader__card-composer-submit:hover:not(:disabled),
+.weibo-grid-reader__comment-submit:hover:not(:disabled),
+.weibo-grid-reader__comment-inline-reply-footer button[type="submit"]:hover:not(:disabled) {
+  background: #da6300;
+  border-color: #da6300;
+}
+
+.weibo-grid-reader__detail-action:hover:not(:disabled),
+.weibo-grid-reader__detail-like:hover,
+.weibo-grid-reader__detail-action--active,
+.weibo-grid-reader__comment-emoji-trigger:hover,
+.weibo-grid-reader__comment-emoji-picker[data-open="true"] .weibo-grid-reader__comment-emoji-trigger,
+.weibo-grid-reader__comment-emoji-option:hover {
+  background: #fff1e2;
+  color: #c75b00;
+}
+
+.weibo-grid-reader__detail-like--active,
+.weibo-grid-reader__detail-like--active:hover {
+  background: #f47a11;
+  border-color: #f47a11;
+  color: #fff;
+}
+
+.weibo-grid-reader__comment .weibo-grid-reader__comment-header .weibo-grid-reader__comment-author-badge {
+  background: #fff1e2;
+  color: #c75b00;
+}
+
+.weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: #fff1e2;
+  color: #e66d00;
+}
+
+.weibo-grid-reader__detail-thumbnail:hover,
+.weibo-grid-reader__detail-thumbnail--active {
+  border-color: #ff8200;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-composer-cancel,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button {
+  color: #ff9f0a;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-action--liked,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone--liked {
+  color: #ff9f0a;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action:hover:not(:disabled),
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-action--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-zone-bar--revealed .weibo-grid-reader__comment-zone:hover {
+  background: #513514;
+  color: #ffb340;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-like--active:hover,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__card-composer-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-submit,
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-footer button[type="submit"] {
+  background: #ff9f0a;
+  border-color: #ff9f0a;
+  color: #1d1d1f;
+}
+
+@keyframes weibo-grid-reader-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes weibo-grid-reader-detail-in {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weibo-grid-reader__detail-overlay,
+  .weibo-grid-reader__detail-dialog {
+    animation: none;
+  }
+
+  .weibo-grid-reader__card,
+  .weibo-grid-reader__card-action,
+  .weibo-grid-reader__detail-action,
+  .weibo-grid-reader__detail-like,
+  .weibo-grid-reader__image {
+    transition-duration: 0ms;
+  }
+}
+
+@keyframes weibo-grid-reader-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 1080px) {
+  html.weibo-grid-reader-active .weibo-grid-reader-navigation-panel {
+    position: sticky !important;
+    top: 76px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #weibo-grid-reader-root {
+    bottom: 18px;
+    left: 16px;
+    right: auto;
+    top: auto;
+  }
+
+  .weibo-grid-reader__drawer {
+    bottom: 16px;
+    left: 72px;
+    right: auto;
+  }
+
+  html.weibo-grid-reader-active .weibo-grid-reader-page-layout {
+    width: 100% !important;
+  }
+
+  html.weibo-grid-reader-active .weibo-grid-reader-feed-shell,
+  html.weibo-grid-reader-active .weibo-grid-reader-composer-panel,
+  #weibo-grid-reader-surface {
+    width: 100% !important;
+  }
+
+  .weibo-grid-reader__card {
+    padding: 14px;
+  }
+
+  .weibo-grid-reader__detail-overlay {
+    padding: 0;
+  }
+
+  .weibo-grid-reader__detail-dialog {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100vh - 24px);
+    overflow-y: auto;
+    width: calc(100vw - 24px);
+  }
+
+  .weibo-grid-reader__detail-dialog--image-focus {
+    height: calc(100vh - 24px);
+  }
+
+  .weibo-grid-reader__detail-dialog--text-only[data-weibo-grid-text-size] {
+    height: calc(100vh - 24px);
+    width: calc(100vw - 24px);
+  }
+
+  .weibo-grid-reader__detail-main {
+    overflow-y: auto;
+    padding: 18px;
+  }
+
+  .weibo-grid-reader__detail-main--image-focus {
+    overflow-y: auto;
+  }
+
+  .weibo-grid-reader__detail-image-viewer {
+    height: min(420px, calc(100vh - 220px));
+  }
+
+  .weibo-grid-reader__detail-side {
+    border-left: 0;
+    border-top: 1px solid #f2e7d9;
+  }
+
+  .weibo-grid-reader__detail-side-content {
+    max-height: none;
+    overflow-y: auto;
+  }
+
+}
+
+.weibo-grid-reader__detail-comment-switcher {
+  background: #fffaf5;
+  border-bottom: 1px solid #f2e7d9;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px 14px;
+}
+
+.weibo-grid-reader__detail-comment-tab {
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: #6e6e73;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 34px;
+  overflow: hidden;
+  padding: 7px 8px;
+  text-overflow: ellipsis;
+  transition: background-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+
+.weibo-grid-reader__detail-comment-tab[aria-selected="true"] {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  color: #c75b00;
+}
+
+.weibo-grid-reader__detail-comment-tab:hover {
+  background: #fff1e2;
+  color: #c75b00;
+}
+
+.weibo-grid-reader__detail-comment-tab:focus-visible {
+  outline: 2px solid #ff8200;
+  outline-offset: 2px;
+}
+
+.weibo-grid-reader__detail-comment-context[hidden] {
+  display: none;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-switcher {
+  background: #2b2927;
+  border-bottom-color: #4a3b30;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-tab {
+  color: #aeaeb2;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-tab[aria-selected="true"] {
+  background: #3a3a3c;
+  box-shadow: none;
+  color: #ff9f0a;
+}
+
+html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-comment-tab:hover {
+  background: #493426;
+  color: #ff9f0a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weibo-grid-reader__detail-comment-tab {
+    transition-duration: 0ms;
+  }
+}
