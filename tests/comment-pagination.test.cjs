@@ -68,7 +68,7 @@ test('explicit refresh replaces stale comments and cleans up their composers', (
 test('async pagination passes append mode and rejects a stale response', async () => {
   let resolveRequest;
   const calls = [];
-  const comments = { dataset: {}, isConnected: true };
+  const comments = { dataset: {}, isConnected: true, setAttribute() {} };
   const state = { comments: [{ id: 'old' }], commentIds: new Set(['old']), hasMore: true,
     requestVersion: 0, detailSessionId: 1, maxId: 'cursor1', loadMoreSentinel: {}, totalNumber: 100, noProgressCount: 0 };
   const context = vm.createContext({
@@ -91,4 +91,38 @@ test('async pagination passes append mode and rejects a stale response', async (
   await stale;
   assert.equal(state.comments.length, 2);
   assert.equal(calls.length, 1);
+});
+
+test('request rejection clears loading and leaves a retryable error state', async () => {
+  const busyStates = [];
+  const calls = [];
+  const comments = {
+    dataset: {},
+    isConnected: true,
+    setAttribute(name, value) { if (name === 'aria-busy') busyStates.push(value); }
+  };
+  const state = {
+    comments: [{ id: 'old' }],
+    commentIds: new Set(['old']),
+    hasMore: false,
+    requestVersion: 0,
+    detailSessionId: 1,
+    maxId: '',
+    loadMoreSentinel: {},
+    totalNumber: 1,
+    noProgressCount: 0
+  };
+  const context = vm.createContext({
+    detailCommentStates: { get: () => state }, activeDetailSessionId: 1,
+    getStatusId: () => 'status', hasValidExtensionContext: () => true,
+    bridgeRequest: async () => { throw new Error('network failure'); },
+    renderDetailComments: (...args) => calls.push(args[4]),
+    preloadCommentReplies: async () => {}
+  });
+  vm.runInContext(source.slice(source.indexOf('  async function loadDetailComments('), source.indexOf('  function closeDetail(')), context);
+  await context.loadDetailComments({}, comments, {}, false);
+  assert.equal(state.loading, false);
+  assert.equal(state.error, 'network failure');
+  assert.deepEqual(busyStates, ['true', 'false']);
+  assert.deepEqual(calls, [undefined]);
 });
