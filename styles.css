@@ -438,11 +438,6 @@ html.weibo-grid-reader-active footer {
 
 .weibo-grid-reader__card:hover {
   box-shadow: 0 0 0 5px #e2e7ea, 0 12px 28px rgb(28 28 28 / 14%);
-  transform: translate3d(
-    var(--weibo-grid-reader-card-x, 0px),
-    calc(var(--weibo-grid-reader-card-y, 0px) - 2px),
-    0
-  );
 }
 
 html.weibo-grid-reader-detail-open {
@@ -485,38 +480,6 @@ html.weibo-grid-reader-image-preview-open {
   overflow: hidden;
   position: fixed;
   width: min(var(--weibo-grid-detail-width), calc(100vw - 28px));
-}
-
-.weibo-grid-reader__detail-close {
-  align-items: center;
-  background: rgb(255 255 255 / 88%);
-  border: 1px solid rgb(65 48 35 / 12%);
-  border-radius: 50%;
-  color: #675849;
-  cursor: pointer;
-  display: inline-flex;
-  font: 600 20px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  height: 32px;
-  justify-content: center;
-  padding: 0 0 2px;
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-  width: 32px;
-  z-index: 2;
-}
-
-.weibo-grid-reader__detail-close:hover,
-.weibo-grid-reader__detail-close:focus-visible {
-  background: #fff1e4;
-  border-color: #e4b68d;
-  color: #a94d13;
-}
-
-.weibo-grid-reader__detail-close:focus-visible {
-  outline: 2px solid rgb(180 81 0 / 35%);
-  outline-offset: 2px;
 }
 
 .weibo-grid-reader__detail-dialog[data-weibo-grid-density-columns="2"] {
@@ -2615,19 +2578,6 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog {
   color-scheme: dark;
 }
 
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-close {
-  background: rgb(43 44 49 / 94%);
-  border-color: #504238;
-  color: #d7c6b8;
-}
-
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-close:hover,
-html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-close:focus-visible {
-  background: #493426;
-  border-color: #b4692d;
-  color: #ffc18b;
-}
-
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-dialog--text-only .weibo-grid-reader__detail-side,
 html.weibo-grid-reader-theme-dark .weibo-grid-reader__detail-side {
   border-color: #3a342f;
@@ -3508,11 +3458,6 @@ html.weibo-grid-reader-theme-dark .weibo-grid-reader__comment-inline-reply-foote
     height: calc(100vh - 24px);
     overflow-y: auto;
     width: calc(100vw - 24px);
-  }
-
-  .weibo-grid-reader__detail-close {
-    right: 8px;
-    top: 8px;
   }
 
   .weibo-grid-reader__detail-dialog--image-focus {

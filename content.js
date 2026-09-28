@@ -5525,13 +5525,6 @@
     const dialog = document.createElement("div");
     dialog.className = "weibo-grid-reader__detail-dialog";
     dialog.tabIndex = -1;
-    const closeButton = document.createElement("button");
-    closeButton.type = "button";
-    closeButton.className = "weibo-grid-reader__detail-close";
-    closeButton.setAttribute("aria-label", "关闭微博详情");
-    closeButton.title = "关闭详情（Esc）";
-    closeButton.textContent = "×";
-    closeButton.addEventListener("click", () => closeDetail(true));
     dialog.dataset.weiboGridDensityColumns = String(settings.columnCount);
     const detailMedia = createDetailMedia(hasRepost ? repostStatus : status);
     const main = document.createElement("main");
@@ -5625,7 +5618,7 @@
     }
     side.append(sideContent);
 
-    dialog.append(closeButton, main, side);
+    dialog.append(main, side);
     overlay.setAttribute("aria-label", "微博详情");
     overlay.append(dialog);
     overlay.addEventListener("click", (event) => {
@@ -5681,7 +5674,7 @@
     window.requestAnimationFrame(() => {
       window.scrollTo(scrollPosition.left, scrollPosition.top);
       positionDetailDialog(dialog);
-      closeButton.focus({ preventScroll: true });
+      dialog.focus({ preventScroll: true });
     });
 
     try {
