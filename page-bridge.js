@@ -16,7 +16,7 @@
   const observedTimelineEndpointByRoute = new Map();
   const observedTimelineEndpointByGroup = new Map();
   let latestObservedOfficialTimeline = null;
-  let readerTimelineRequestDepth = 0;
+  const nativeTimelineFetch = window.fetch.bind(window);
 
   function respond(requestId, bridgeSessionId, payload) {
     window.postMessage(
@@ -271,7 +271,7 @@
           reason: payload?.msg || payload?.message || `微博操作失败（HTTP ${response.status}）。`
         };
       }
-      if (!payload || Number(payload.ok) <= 0) {
+      if (!payload || Number(payload.ok) !== 1) {
         return { ok: false, reason: payload?.msg || payload?.message || "微博没有确认此次操作。" };
       }
 
@@ -433,16 +433,11 @@
   function installOfficialTimelineObserver() {
     const nativeFetch = window.fetch.bind(window);
     window.fetch = function observedFetch(input, init) {
-      const shouldObserve = readerTimelineRequestDepth === 0;
       const routeKey = getFeedRouteKey();
       const endpoint = getRequestUrl(input);
-      if (shouldObserve) {
-        rememberTimelineEndpoint(endpoint, routeKey);
-      }
+      rememberTimelineEndpoint(endpoint, routeKey);
       const responsePromise = nativeFetch(input, init);
-      if (shouldObserve) {
-        void responsePromise.then((response) => observeFetchTimeline(input, response, routeKey)).catch(() => {});
-      }
+      void responsePromise.then((response) => observeFetchTimeline(input, response, routeKey)).catch(() => {});
       return responsePromise;
     };
 
@@ -456,7 +451,7 @@
     XMLHttpRequest.prototype.send = function observedSend(...args) {
       const request = requestUrls.get(this);
       const endpoint = request?.endpoint;
-      if (readerTimelineRequestDepth === 0 && isTimelineEndpoint(endpoint)) {
+      if (isTimelineEndpoint(endpoint)) {
         rememberTimelineEndpoint(endpoint, request.routeKey);
         this.addEventListener("loadend", () => {
           if (this.status < 200 || this.status >= 300) {
@@ -556,8 +551,14 @@
     return timeline && timeline.receivedAt >= requestedAt ? timeline.payload : null;
   }
 
-  function getFreshLatestObservedOfficialTimeline(requestedAt) {
+  function getFreshLatestObservedOfficialTimeline(requestedAt, routeKey, groupId) {
     if (!requestedAt || !latestObservedOfficialTimeline || latestObservedOfficialTimeline.receivedAt < requestedAt) {
+      return null;
+    }
+    const requestedGroupId = String(groupId || getFeedGroupId(routeKey) || "");
+    const observedGroupId = String(latestObservedOfficialTimeline.groupId || getFeedGroupId(latestObservedOfficialTimeline.routeKey) || "");
+    if (requestedGroupId !== observedGroupId
+      || (!requestedGroupId && latestObservedOfficialTimeline.routeKey !== getFeedRouteKey(routeKey))) {
       return null;
     }
     return latestObservedOfficialTimeline.payload;
@@ -575,7 +576,7 @@
         return routePayload;
       }
     }
-    return getFreshLatestObservedOfficialTimeline(requestedAt);
+    return getFreshLatestObservedOfficialTimeline(requestedAt, routeKey, normalizedGroupId);
   }
 
   async function waitForOfficialTimeline(routeKey, requestedAt, groupId = "") {
@@ -596,16 +597,10 @@
     let lastResponse = null;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      readerTimelineRequestDepth += 1;
-      let response;
-      try {
-        response = await window.fetch(endpoint, {
-          credentials: "same-origin",
-          headers: createWeiboRequestHeaders()
-        });
-      } finally {
-        readerTimelineRequestDepth -= 1;
-      }
+      const response = await nativeTimelineFetch(endpoint, {
+        credentials: "same-origin",
+        headers: createWeiboRequestHeaders()
+      });
 
       lastResponse = response;
       if (response.ok) {

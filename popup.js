@@ -13,7 +13,8 @@
   const columnSlider = document.querySelector('[data-setting="columnCount"]');
   const densityLabels = [...document.querySelectorAll("[data-density-label]")];
   const quickActionsToggle = document.querySelector('[data-setting="cardQuickActions"]');
-  const controls = [readerToggle, columnSlider, quickActionsToggle];
+  const sidePanelToggle = document.querySelector('[data-setting="sidePanelVisible"]');
+  const controls = [readerToggle, columnSlider, quickActionsToggle, sidePanelToggle];
   let activeTabId = null;
   let busy = false;
 
@@ -36,6 +37,7 @@
     columnSlider.value = String(state.columnCount);
     updateDensityState(state.columnCount);
     quickActionsToggle.checked = Boolean(state.cardQuickActions);
+    sidePanelToggle.checked = Boolean(state.sidePanelVisible);
     settingsPanel.hidden = false;
     setStatus("", "ready");
     setBusy(false);
@@ -109,6 +111,9 @@
   });
   quickActionsToggle.addEventListener("change", () => {
     void updateSetting("cardQuickActions", quickActionsToggle.checked);
+  });
+  sidePanelToggle.addEventListener("change", () => {
+    void updateSetting("sidePanelVisible", sidePanelToggle.checked);
   });
 
   async function start() {
