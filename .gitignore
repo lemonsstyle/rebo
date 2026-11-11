@@ -1,2 +1,8 @@
 .mimocode/
 node_modules/
+
+AUDIT_REPORT.md
+FIX_PROGRESS.md
+apple-design-ethos.md
+tests/browser-smoke.cjs
+tests/timeline-regressions.test.cjs
