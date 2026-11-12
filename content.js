@@ -6180,7 +6180,6 @@
     const root = getExtensionRoot();
     root?.classList.add("weibo-grid-reader--transitioning");
     currentPageLayout?.setAttribute("aria-busy", "true");
-    setDrawerOpen(false);
 
     try {
       if (reduceMotion || !isFeedRoute()) {
@@ -6229,7 +6228,6 @@
     const root = getExtensionRoot();
     root?.classList.add("weibo-grid-reader--transitioning");
     currentPageLayout?.setAttribute("aria-busy", "true");
-    setDrawerOpen(false);
 
     try {
       await runLayoutTransition(applyLayout);
@@ -6245,49 +6243,88 @@
     }
   }
 
-  function setCardQuickActions(nextEnabled, toggle) {
+  async function setCardQuickActions(nextEnabled, toggle) {
     const enabled = Boolean(nextEnabled);
     if (layoutTransitionInProgress || enabled === settings.cardQuickActions) {
-      toggle.checked = settings.cardQuickActions;
+      if (toggle) {
+        toggle.checked = settings.cardQuickActions;
+      }
       return;
     }
 
-    settings.cardQuickActions = enabled;
-    saveSettings();
-    updateControlState();
+    const previousEnabled = settings.cardQuickActions;
+    const applyLayout = async () => {
+      settings.cardQuickActions = enabled;
+      saveSettings();
+      updateControlState();
 
-    for (const card of getReaderGrid()?.querySelectorAll(".weibo-grid-reader__card") || []) {
-      const status = card.__weiboGridStatus;
-      if (!status) continue;
-      let interactions = card.__weiboGridInteractions;
-      const metrics = card.querySelector(":scope > .weibo-grid-reader__metrics:not(.weibo-grid-reader__card-actions)");
-      if (enabled) {
-        if (!interactions) {
-          interactions = createCardInteractions(status);
-          card.__weiboGridInteractions = interactions;
-        }
-        metrics?.remove();
-        card.append(interactions.footer, interactions.composer, interactions.feedback);
-        interactions.refresh();
-      } else if (interactions) {
-        cleanupCommentTransientPickers(card);
-        interactions.footer.remove();
-        interactions.composer.remove();
-        interactions.feedback.remove();
-        if (!metrics) {
-          const footer = document.createElement("div");
-          footer.className = "weibo-grid-reader__metrics";
-          footer.append(createMetric("转发", status.reposts_count, "reposts"),
-            createMetric("评论", status.comments_count, "comments"),
-            createMetric("赞", status.attitudes_count, "attitudes"));
-          card.append(footer);
+      for (const card of getReaderGrid()?.querySelectorAll(".weibo-grid-reader__card") || []) {
+        const status = card.__weiboGridStatus;
+        if (!status) continue;
+        let interactions = card.__weiboGridInteractions;
+        const metrics = card.querySelector(":scope > .weibo-grid-reader__metrics:not(.weibo-grid-reader__card-actions)");
+        if (enabled) {
+          if (!interactions) {
+            interactions = createCardInteractions(status);
+            card.__weiboGridInteractions = interactions;
+          }
+          metrics?.remove();
+          card.append(interactions.footer, interactions.composer, interactions.feedback);
+          interactions.refresh();
+        } else if (interactions) {
+          cleanupCommentTransientPickers(card);
+          interactions.footer.remove();
+          interactions.composer.remove();
+          interactions.feedback.remove();
+          if (!metrics) {
+            const footer = document.createElement("div");
+            footer.className = "weibo-grid-reader__metrics";
+            footer.append(createMetric("转发", status.reposts_count, "reposts"),
+              createMetric("评论", status.comments_count, "comments"),
+              createMetric("赞", status.attitudes_count, "attitudes"));
+            card.append(footer);
+          }
         }
       }
+      scheduleMasonryLayout();
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      return true;
+    };
+
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduceMotion) {
+      const layoutApplied = await applyLayout().catch(() => false);
+      if (!layoutApplied) {
+        settings.cardQuickActions = previousEnabled;
+        saveSettings();
+        updateControlState();
+      }
+      return;
     }
-    scheduleMasonryLayout();
+
+    layoutTransitionInProgress = true;
+    if (toggle) {
+      toggle.disabled = true;
+    }
+    const root = getExtensionRoot();
+    root?.classList.add("weibo-grid-reader--transitioning");
+    currentPageLayout?.setAttribute("aria-busy", "true");
+
+    try {
+      const layoutApplied = await runLayoutTransition(applyLayout);
+      if (!layoutApplied) {
+        settings.cardQuickActions = previousEnabled;
+        saveSettings();
+      }
+    } finally {
+      layoutTransitionInProgress = false;
+      root?.classList.remove("weibo-grid-reader--transitioning");
+      currentPageLayout?.removeAttribute("aria-busy");
+      updateControlState();
+    }
   }
 
-  function setSidePanelVisible(nextEnabled, toggle) {
+  async function setSidePanelVisible(nextEnabled, toggle) {
     const enabled = Boolean(nextEnabled);
     if (layoutTransitionInProgress || enabled === settings.sidePanelVisible) {
       if (toggle) {
@@ -6296,11 +6333,50 @@
       return;
     }
 
-    settings.sidePanelVisible = enabled;
-    saveSettings();
-    updatePageClasses();
-    updateControlState();
-    scheduleMasonryLayout();
+    const previousEnabled = settings.sidePanelVisible;
+    const applyLayout = async () => {
+      settings.sidePanelVisible = enabled;
+      saveSettings();
+      updatePageClasses();
+      updateControlState();
+      scheduleMasonryLayout();
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      return true;
+    };
+
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduceMotion) {
+      const layoutApplied = await applyLayout().catch(() => false);
+      if (!layoutApplied) {
+        settings.sidePanelVisible = previousEnabled;
+        saveSettings();
+        updatePageClasses();
+        updateControlState();
+      }
+      return;
+    }
+
+    layoutTransitionInProgress = true;
+    if (toggle) {
+      toggle.disabled = true;
+    }
+    const root = getExtensionRoot();
+    root?.classList.add("weibo-grid-reader--transitioning");
+    currentPageLayout?.setAttribute("aria-busy", "true");
+
+    try {
+      const layoutApplied = await runLayoutTransition(applyLayout);
+      if (!layoutApplied) {
+        settings.sidePanelVisible = previousEnabled;
+        saveSettings();
+        updatePageClasses();
+      }
+    } finally {
+      layoutTransitionInProgress = false;
+      root?.classList.remove("weibo-grid-reader--transitioning");
+      currentPageLayout?.removeAttribute("aria-busy");
+      updateControlState();
+    }
   }
 
   function setDrawerOpen(nextDrawerOpen) {
@@ -6357,9 +6433,9 @@
           }
           await setColumnCountWithTransition(columnCount, controls.densitySlider);
         } else if (message.key === "cardQuickActions") {
-          setCardQuickActions(Boolean(message.value), controls.cardQuickActionsToggle);
+          await setCardQuickActions(Boolean(message.value), controls.cardQuickActionsToggle);
         } else if (message.key === "sidePanelVisible") {
-          setSidePanelVisible(Boolean(message.value), controls.sidePanelToggle);
+          await setSidePanelVisible(Boolean(message.value), controls.sidePanelToggle);
         } else {
           throw new Error("无法识别这项设置。");
         }
@@ -6490,11 +6566,11 @@
     });
 
     root.querySelector("[data-card-quick-actions-toggle]")?.addEventListener("change", (event) => {
-      setCardQuickActions(event.currentTarget.checked, event.currentTarget);
+      void setCardQuickActions(event.currentTarget.checked, event.currentTarget);
     });
 
     root.querySelector("[data-side-panel-toggle]")?.addEventListener("change", (event) => {
-      setSidePanelVisible(event.currentTarget.checked, event.currentTarget);
+      void setSidePanelVisible(event.currentTarget.checked, event.currentTarget);
     });
 
     root.querySelector("[data-density-slider]")?.addEventListener("change", (event) => {

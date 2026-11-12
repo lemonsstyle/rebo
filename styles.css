@@ -218,6 +218,11 @@
   opacity: 0.48;
 }
 
+html.weibo-grid-reader-layout-transitioning .weibo-grid-reader__switch input:disabled + .weibo-grid-reader__switch-track {
+  cursor: inherit;
+  opacity: 1;
+}
+
 .weibo-grid-reader__density-control {
   display: grid;
   flex: 0 0 138px;
@@ -287,6 +292,11 @@
 .weibo-grid-reader__density-slider:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+
+html.weibo-grid-reader-layout-transitioning .weibo-grid-reader__density-slider:disabled {
+  cursor: inherit;
+  opacity: 1;
 }
 
 .weibo-grid-reader__density-labels {
